@@ -1,5 +1,7 @@
 package org.jbackup.jbackup.service;
 
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.exception.ZipException;
 import org.jbackup.jbackup.config.JBackupConfig;
 import org.jbackup.jbackup.config.SaveConfig;
 import org.jbackup.jbackup.exception.JBackupException;
@@ -49,12 +51,22 @@ public class BackupService {
                                     p = shadowCopyUtils.getPath(p.toAbsolutePath());
                                 }
 
-                                try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
-                                    ZipOutputStream zipOut = new ZipOutputStream(fos);
+                                if(false) {
 
-                                    save(zipOut, p, "", save);
+                                    try(ZipFile zipFile = new ZipFile(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")){
 
-                                    zipOut.close();
+                                        save2(zipFile, p, "", save);
+
+                                    }
+
+                                } else {
+                                    try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
+                                        ZipOutputStream zipOut = new ZipOutputStream(fos);
+
+                                        save(zipOut, p, "", save);
+
+                                        zipOut.close();
+                                    }
                                 }
                             }
                             LOGGER.info("backup {} ok", entry.getKey());
@@ -72,6 +84,39 @@ public class BackupService {
         boolean isWindows = System.getProperty("os.name")
                     .toLowerCase().startsWith("windows");
         return isWindows;
+    }
+
+    private void save2(ZipFile zipOut, Path p, String directory, SaveConfig save) {
+        try (var listFiles = Files.list(p)) {
+            listFiles.forEach(x -> {
+                if (exclude(x, save)) {
+                    LOGGER.debug("ignore {}", x);
+                } else {
+                    if (Files.isDirectory(x)) {
+                        var dir = "";
+                        if (StringUtils.hasText(directory)) {
+                            dir = directory + "/" + x.getFileName();
+                        } else {
+                            dir = x.getFileName().toString();
+                        }
+                        save2(zipOut, x, dir, save);
+                    } else {
+                        if (include(x, save)) {
+                            //addFile(zipOut, directory, x);
+                            try {
+                                zipOut.addFile(x.toString());
+                            } catch (ZipException e) {
+                                throw new RuntimeException(e);
+                            }
+                        } else {
+                            LOGGER.debug("not include {}", x);
+                        }
+                    }
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException("Error for save", e);
+        }
     }
 
     private void save(ZipOutputStream zipOut, Path p, String directory, SaveConfig save) {
