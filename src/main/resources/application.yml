@@ -3,6 +3,9 @@ jbackup:
   global:
     compress: zip
     verbose: false
+    crypt: true
+    password: 12345
+    splitSize:
   dir:
     test1:
       #path: D:/temp/amdfx

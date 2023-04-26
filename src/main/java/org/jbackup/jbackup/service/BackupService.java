@@ -2,6 +2,11 @@ package org.jbackup.jbackup.service;
 
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
+import net.lingala.zip4j.model.enums.CompressionLevel;
+import net.lingala.zip4j.model.enums.CompressionMethod;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.jbackup.jbackup.config.JBackupConfig;
 import org.jbackup.jbackup.config.SaveConfig;
 import org.jbackup.jbackup.exception.JBackupException;
@@ -51,9 +56,13 @@ public class BackupService {
                                     p = shadowCopyUtils.getPath(p.toAbsolutePath());
                                 }
 
-                                if(false) {
-
-                                    try(ZipFile zipFile = new ZipFile(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")){
+                                if(true) {
+                                    var pathZip=save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
+                                    char[] password=null;
+                                    if(jBackupConfig.getGlobal().isCrypt()){
+                                        password=jBackupConfig.getGlobal().getPassword().toCharArray();
+                                    }
+                                    try(ZipFile zipFile = new ZipFile(pathZip,password)){
 
                                         save2(zipFile, p, "", save);
 
@@ -103,9 +112,26 @@ public class BackupService {
                     } else {
                         if (include(x, save)) {
                             //addFile(zipOut, directory, x);
-                            try {
-                                zipOut.addFile(x.toString());
-                            } catch (ZipException e) {
+                            try(var input=Files.newInputStream(x)) {
+                                ZipParameters zipParameters=new ZipParameters();
+                                var dir = "";
+                                if (StringUtils.hasText(directory)) {
+                                    dir = directory + "/" + x.getFileName();
+                                } else {
+                                    dir = x.getFileName().toString();
+                                }
+                                zipParameters.setFileNameInZip(dir);
+                                var lastModified=Files.getLastModifiedTime(x);
+                                zipParameters.setLastModifiedFileTime(lastModified.toMillis());
+                                zipParameters.setCompressionLevel(CompressionLevel.MAXIMUM);
+                                zipParameters.setCompressionMethod(CompressionMethod.STORE);
+                                if(jBackupConfig.getGlobal().isCrypt()) {
+                                    zipParameters.setEncryptFiles(true);
+                                    zipParameters.setEncryptionMethod(EncryptionMethod.AES);
+                                    zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+                                }
+                                zipOut.addStream(input,zipParameters);
+                            } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
                         } else {
