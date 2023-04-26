@@ -3,6 +3,7 @@ package org.jbackup.jbackup.service;
 import org.jbackup.jbackup.config.JBackupConfig;
 import org.jbackup.jbackup.config.SaveConfig;
 import org.jbackup.jbackup.exception.JBackupException;
+import org.jbackup.jbackup.shadowcopy.ShadowCopy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,25 +35,30 @@ public class BackupService {
         try {
             LOGGER.info("backup ...");
             if (jBackupConfig.getDir() != null && !jBackupConfig.getDir().isEmpty()) {
-                for (var entry : jBackupConfig.getDir().entrySet()) {
-                    var save = entry.getValue();
-                    if (save.isDisabled()) {
-                        LOGGER.info("backup {} disabled", entry.getKey());
-                    } else {
-                        LOGGER.info("backup {} ...", entry.getKey());
-                        LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
-                        for (var path : save.getPath()) {
-                            Path p = Path.of(path);
+                try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
+                    for (var entry : jBackupConfig.getDir().entrySet()) {
+                        var save = entry.getValue();
+                        if (save.isDisabled()) {
+                            LOGGER.info("backup {} disabled", entry.getKey());
+                        } else {
+                            LOGGER.info("backup {} ...", entry.getKey());
+                            LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
+                            for (var path : save.getPath()) {
+                                Path p = Path.of(path);
+                                if(isShadowCopy()) {
+                                    p = shadowCopyUtils.getPath(p.toAbsolutePath());
+                                }
 
-                            try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
-                                ZipOutputStream zipOut = new ZipOutputStream(fos);
+                                try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
+                                    ZipOutputStream zipOut = new ZipOutputStream(fos);
 
-                                save(zipOut, p, "", save);
+                                    save(zipOut, p, "", save);
 
-                                zipOut.close();
+                                    zipOut.close();
+                                }
                             }
+                            LOGGER.info("backup {} ok", entry.getKey());
                         }
-                        LOGGER.info("backup {} ok", entry.getKey());
                     }
                 }
             }
@@ -60,6 +66,12 @@ public class BackupService {
         } catch (Exception e) {
             LOGGER.error("Error", e);
         }
+    }
+
+    private boolean isShadowCopy() {
+        boolean isWindows = System.getProperty("os.name")
+                    .toLowerCase().startsWith("windows");
+        return isWindows;
     }
 
     private void save(ZipOutputStream zipOut, Path p, String directory, SaveConfig save) {
