@@ -9,6 +9,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import java.io.*;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -63,11 +64,77 @@ public class RunnerApp implements ApplicationRunner {
                 LOGGER.info("shadowVolume={}",shadowVolume2);
                 if(shadowVolume2.isPresent()) {
                     copy0(shadowVolume2.get());
+                    copy2(shadowVolume2.get());
                 }
                 deleteShadowCopy('E', shadowVolume.get());
             }
         } catch (Exception e) {
             LOGGER.error("Erreur", e);
+        }
+    }
+
+    private void copy2(String s) {
+        try {
+            LOGGER.info("copy2 from {}", s);
+//            var p = Path.of(s, "res02_11_2021.txt");
+//            var p2 = Path.of("d:/temp/mon_fichier_" + Instant.now().getEpochSecond() + ".txt");
+//            Files.copy(p, p2);
+            File f1=new File(s, "res02_11_2021.txt");
+            File f2=new File("d:/temp/mon_fichier_" + Instant.now().getEpochSecond() + ".7z");
+
+    var src=f1.toString();
+    var zip="C:\\Program Files\\7-Zip\\7z";
+
+            ProcessBuilder builder = new ProcessBuilder();
+
+                //builder.command("cmd.exe", "/c", "dir");
+                //builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
+//                builder.command("cmd.exe", "/c","powershell.exe", "-Command (gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
+//                builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')");
+            builder.command("cmd.exe", "/c",zip,"a",f2.toString(),src);
+
+            builder.directory(new File(System.getProperty("user.home")));
+            TeeList liste = new TeeList();
+            Process process = builder.start();
+            StreamGobbler streamGobbler =
+                    new StreamGobbler(process.getInputStream(), liste::add);
+            StreamGobbler streamGobbler2 =
+                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
+            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+            int exitCode = process.waitFor();
+            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+            future.get(10, TimeUnit.SECONDS);
+            future2.get(10, TimeUnit.SECONDS);
+
+//            try{
+////                var p=f1.toPath();
+//                var p=f1.toURI();
+////                var p2=Path.of(f1.toURI());
+//                LOGGER.info("p={}",p);
+////                LOGGER.info("p2={}",p2);
+//            }catch(Exception e){
+//                LOGGER.error("Erreur",e);
+//            }
+////            try{
+////               var input=new FileInputStream(f1);
+//            try (
+//                    InputStream in = new BufferedInputStream(
+//                            new FileInputStream(f1));
+//                    OutputStream out = new BufferedOutputStream(
+//                            new FileOutputStream(f2))) {
+//
+//                byte[] buffer = new byte[1024];
+//                int lengthRead;
+//                while ((lengthRead = in.read(buffer)) > 0) {
+//                    out.write(buffer, 0, lengthRead);
+//                    out.flush();
+//                }
+//            }
+//            }
+            LOGGER.info("copy2 from {} to {} OK", s,f2);
+        }catch(Exception e){
+            LOGGER.error("Erreur",e);
         }
     }
 
@@ -85,6 +152,18 @@ public class RunnerApp implements ApplicationRunner {
 //                var p2=Path.of(f1.toURI());
                 LOGGER.info("p={}",p);
 //                LOGGER.info("p2={}",p2);
+                //LOGGER.info("p3={}",Path.of(URI.create(f1.toString())));
+//                LOGGER.info("p3={}",Path.of(f1.toString()));
+                var s2=f1.toString();
+                if(s2.startsWith("\\\\?\\")){
+                    s2="\\\\.\\"+s2.substring(4);
+                }
+//                s2=s2.replace('?','.');
+                LOGGER.info("p3={}",Path.of(s2));
+                var dest=Path.of("d:/temp/mon_fichier_" + Instant.now().getEpochSecond() + "_bis.txt");
+                Files.copy(Path.of(s2),dest);
+                Assert.isTrue(Files.exists(dest),"dest="+dest);
+                LOGGER.info("copy path ok (dest={})",dest);
             }catch(Exception e){
                 LOGGER.error("Erreur",e);
             }
@@ -104,7 +183,7 @@ public class RunnerApp implements ApplicationRunner {
                     }
                 }
 //            }
-            LOGGER.info("copy from {} tp {} OK", s,f2);
+            LOGGER.info("copy from {} to {} OK", s,f2);
         }catch(Exception e){
             LOGGER.error("Erreur",e);
         }
