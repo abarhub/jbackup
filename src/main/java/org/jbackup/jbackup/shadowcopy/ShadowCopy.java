@@ -7,13 +7,13 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class ShadowCopy implements AutoCloseable {
 
@@ -83,33 +83,28 @@ public class ShadowCopy implements AutoCloseable {
     private Optional<String> createShadowCopy(char volume) {
         try {
             LOGGER.info("create shadow copy for {} ...", volume);
-            boolean isWindows = System.getProperty("os.name")
-                    .toLowerCase().startsWith("windows");
-            ProcessBuilder builder = new ProcessBuilder();
-            if (isWindows) {
-                //builder.command("cmd.exe", "/c", "dir");
-                //builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
-//                builder.command("cmd.exe", "/c","powershell.exe", "-Command (gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
-                builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')");
-            } else {
-                builder.command("sh", "-c", "ls");
-            }
-            builder.directory(new File(System.getProperty("user.home")));
-            TeeList liste = new TeeList();
-            Process process = builder.start();
-            StreamGobbler streamGobbler =
-                    new StreamGobbler(process.getInputStream(), liste::add);
-            StreamGobbler streamGobbler2 =
-                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
-            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
-            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
-            int exitCode = process.waitFor();
-            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
-            future.get(10, TimeUnit.SECONDS);
-            future2.get(10, TimeUnit.SECONDS);
+            List<String> liste;
+            liste=run(List.of("powershell.exe", "-Command",
+                    "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')"),
+                    true);
+//            ProcessBuilder builder = new ProcessBuilder();
+//            builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')");
+//            builder.directory(new File(System.getProperty("user.home")));
+//            TeeList liste = new TeeList();
+//            Process process = builder.start();
+//            StreamGobbler streamGobbler =
+//                    new StreamGobbler(process.getInputStream(), liste::add);
+//            StreamGobbler streamGobbler2 =
+//                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
+//            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+//            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+//            int exitCode = process.waitFor();
+//            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+//            future.get(10, TimeUnit.SECONDS);
+//            future2.get(10, TimeUnit.SECONDS);
             LOGGER.info("create shadow copy for {} OK", volume);
-            return liste.getList().stream()
-                    .filter(x -> x != null)
+            return liste.stream()
+                    .filter(Objects::nonNull)
                     .filter(x -> x.contains("ShadowID"))
                     .map(x -> x.substring(x.indexOf(':') + 1).trim())
                     .findAny();
@@ -122,27 +117,29 @@ public class ShadowCopy implements AutoCloseable {
     private void deleteShadowCopy(char volume, String shadowId) {
         try {
             LOGGER.info("delete shadow copy for {} ...", volume);
-            ProcessBuilder builder = new ProcessBuilder();
-            //builder.command("cmd.exe", "/c", "dir");
-            //builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
-//                builder.command("cmd.exe", "/c","powershell.exe", "-Command (gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
+//            List<String> liste;
+//            ProcessBuilder builder = new ProcessBuilder();
             if (StringUtils.hasText(shadowId)) {
-                builder.command("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/Shadow=" + shadowId, "/Quiet");
+//                builder.command("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/Shadow=" + shadowId, "/Quiet");
+                run(List.of("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/Shadow=" + shadowId, "/Quiet"),
+                        true);
             } else {
-                builder.command("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/For=" + volume + ":", "/Quiet");
+//                builder.command("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/For=" + volume + ":", "/Quiet");
+                run(List.of("cmd.exe", "/c", "vssadmin", "Delete", "Shadows", "/For=" + volume + ":", "/Quiet"),
+                        true);
             }
-            builder.directory(new File(System.getProperty("user.home")));
-            Process process = builder.start();
-            StreamGobbler streamGobbler =
-                    new StreamGobbler(process.getInputStream(), LOGGER::info);
-            StreamGobbler streamGobbler2 =
-                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
-            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
-            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
-            int exitCode = process.waitFor();
-            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
-            future.get(10, TimeUnit.SECONDS);
-            future2.get(10, TimeUnit.SECONDS);
+//            builder.directory(new File(System.getProperty("user.home")));
+//            Process process = builder.start();
+//            StreamGobbler streamGobbler =
+//                    new StreamGobbler(process.getInputStream(), LOGGER::info);
+//            StreamGobbler streamGobbler2 =
+//                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
+//            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+//            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+//            int exitCode = process.waitFor();
+//            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+//            future.get(10, TimeUnit.SECONDS);
+//            future2.get(10, TimeUnit.SECONDS);
             LOGGER.info("delete shadow copy for {} OK", volume);
         } catch (Exception e) {
             LOGGER.error("Erreur", e);
@@ -154,43 +151,61 @@ public class ShadowCopy implements AutoCloseable {
     private Optional<String> getShadowCopy(char volume, String shadowId) {
         try {
             LOGGER.info("list shadow copy for {}({}) ...", volume, shadowId);
-            boolean isWindows = true;
-            ProcessBuilder builder = new ProcessBuilder();
-            //builder.command("cmd.exe", "/c", "dir");
-            //builder.command("powershell.exe", "-Command", "(gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
-//                builder.command("cmd.exe", "/c","powershell.exe", "-Command (gwmi -list win32_shadowcopy).Create('E:\\','ClientAccessible')");
+            List<String> liste;
+//            ProcessBuilder builder = new ProcessBuilder();
             if (StringUtils.hasText(shadowId)) {
 //                builder.command("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":", "/Shadow=" + shadowId);
-                builder.command("powershell.exe", "Get-WmiObject Win32_ShadowCopy | Where-Object { $_.ID -eq '" + shadowId + "' } | Select DeviceObject");
+//                builder.command("powershell.exe", "Get-WmiObject Win32_ShadowCopy | Where-Object { $_.ID -eq '" + shadowId + "' } | Select DeviceObject");
+                liste=run(List.of("powershell.exe",
+                        "Get-WmiObject Win32_ShadowCopy | Where-Object { $_.ID -eq '" + shadowId + "' } | Select DeviceObject"),
+                        true);
             } else {
-                builder.command("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":");
+//                builder.command("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":");
+                liste=run(List.of("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":"),
+                        true);
             }
-            builder.directory(new File(System.getProperty("user.home")));
-            TeeList liste = new TeeList();
-            Process process = builder.start();
-            StreamGobbler streamGobbler =
-                    new StreamGobbler(process.getInputStream(), liste::add);
-            StreamGobbler streamGobbler2 =
-                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
-            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
-            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
-            int exitCode = process.waitFor();
-            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
-            future.get(10, TimeUnit.SECONDS);
-            future2.get(10, TimeUnit.SECONDS);
+//            builder.directory(new File(System.getProperty("user.home")));
+//            TeeList liste = new TeeList();
+//            Process process = builder.start();
+//            StreamGobbler streamGobbler =
+//                    new StreamGobbler(process.getInputStream(), liste::add);
+//            StreamGobbler streamGobbler2 =
+//                    new StreamGobbler(process.getErrorStream(), LOGGER::error);
+//            Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+//            Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+//            int exitCode = process.waitFor();
+//            Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+//            future.get(10, TimeUnit.SECONDS);
+//            future2.get(10, TimeUnit.SECONDS);
             LOGGER.info("list shadow copy for {} OK", volume);
-            LOGGER.info("list shadow copy for {} :", liste.getList());
-//            var s0="Volume de cliché instantané :";
+            LOGGER.info("list shadow copy for {} :", liste);
 
-            return liste.getList().stream()
-//                    .filter(x->x.contains(s0))
-//                    .map(x->x.substring(x.indexOf(':')+1).trim())
+            return liste.stream()
                     .filter(x -> x.startsWith("\\\\"))
-                    .map(x -> x.trim())
+                    .map(String::trim)
                     .findAny();
         } catch (Exception e) {
             LOGGER.error("Erreur", e);
             throw new JBackupException("Erreur pour creer le shadow copy", e);
         }
+    }
+
+    private List<String> run(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        ProcessBuilder builder = new ProcessBuilder();
+        builder.command(commands);
+        builder.directory(new File(System.getProperty("user.home")));
+        TeeList liste = new TeeList(logInfo);
+        Process process = builder.start();
+        StreamGobbler streamGobbler =
+                new StreamGobbler(process.getInputStream(), liste::add);
+        StreamGobbler streamGobbler2 =
+                new StreamGobbler(process.getErrorStream(), LOGGER::error);
+        Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+        Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+        int exitCode = process.waitFor();
+        Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+        future.get(10, TimeUnit.SECONDS);
+        future2.get(10, TimeUnit.SECONDS);
+        return liste.getList();
     }
 }

@@ -1,7 +1,6 @@
 package org.jbackup.jbackup.service;
 
 import net.lingala.zip4j.ZipFile;
-import net.lingala.zip4j.exception.ZipException;
 import net.lingala.zip4j.model.ZipParameters;
 import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.CompressionLevel;
@@ -23,6 +22,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -48,21 +48,22 @@ public class BackupService {
                         if (save.isDisabled()) {
                             LOGGER.info("backup {} disabled", entry.getKey());
                         } else {
+                            Instant debut = Instant.now();
                             LOGGER.info("backup {} ...", entry.getKey());
                             LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
                             for (var path : save.getPath()) {
                                 Path p = Path.of(path);
-                                if(isShadowCopy()) {
+                                if (isShadowCopy()) {
                                     p = shadowCopyUtils.getPath(p.toAbsolutePath());
                                 }
 
-                                if(true) {
-                                    var pathZip=save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
-                                    char[] password=null;
-                                    if(jBackupConfig.getGlobal().isCrypt()){
-                                        password=jBackupConfig.getGlobal().getPassword().toCharArray();
+                                if (true) {
+                                    var pathZip = save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
+                                    char[] password = null;
+                                    if (jBackupConfig.getGlobal().isCrypt()) {
+                                        password = jBackupConfig.getGlobal().getPassword().toCharArray();
                                     }
-                                    try(ZipFile zipFile = new ZipFile(pathZip,password)){
+                                    try (ZipFile zipFile = new ZipFile(pathZip, password)) {
 
                                         save2(zipFile, p, "", save);
 
@@ -78,7 +79,7 @@ public class BackupService {
                                     }
                                 }
                             }
-                            LOGGER.info("backup {} ok", entry.getKey());
+                            LOGGER.info("backup {} ok ({})", entry.getKey(), Duration.between(debut, Instant.now()));
                         }
                     }
                 }
@@ -91,7 +92,7 @@ public class BackupService {
 
     private boolean isShadowCopy() {
         boolean isWindows = System.getProperty("os.name")
-                    .toLowerCase().startsWith("windows");
+                .toLowerCase().startsWith("windows");
         return isWindows;
     }
 
@@ -112,8 +113,8 @@ public class BackupService {
                     } else {
                         if (include(x, save)) {
                             //addFile(zipOut, directory, x);
-                            try(var input=Files.newInputStream(x)) {
-                                ZipParameters zipParameters=new ZipParameters();
+                            try (var input = Files.newInputStream(x)) {
+                                ZipParameters zipParameters = new ZipParameters();
                                 var dir = "";
                                 if (StringUtils.hasText(directory)) {
                                     dir = directory + "/" + x.getFileName();
@@ -121,16 +122,16 @@ public class BackupService {
                                     dir = x.getFileName().toString();
                                 }
                                 zipParameters.setFileNameInZip(dir);
-                                var lastModified=Files.getLastModifiedTime(x);
+                                var lastModified = Files.getLastModifiedTime(x);
                                 zipParameters.setLastModifiedFileTime(lastModified.toMillis());
                                 zipParameters.setCompressionLevel(CompressionLevel.MAXIMUM);
                                 zipParameters.setCompressionMethod(CompressionMethod.STORE);
-                                if(jBackupConfig.getGlobal().isCrypt()) {
+                                if (jBackupConfig.getGlobal().isCrypt()) {
                                     zipParameters.setEncryptFiles(true);
                                     zipParameters.setEncryptionMethod(EncryptionMethod.AES);
                                     zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
                                 }
-                                zipOut.addStream(input,zipParameters);
+                                zipOut.addStream(input, zipParameters);
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
