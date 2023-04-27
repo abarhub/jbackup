@@ -6,10 +6,14 @@ import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.CompressionLevel;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
+import org.jbackup.jbackup.compress.Compress;
+import org.jbackup.jbackup.compress.CompressZip;
+import org.jbackup.jbackup.compress.CompressZip4j;
 import org.jbackup.jbackup.config.JBackupConfig;
 import org.jbackup.jbackup.config.SaveConfig;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
+import org.jbackup.jbackup.utils.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -57,7 +61,7 @@ public class BackupService {
                                     p = shadowCopyUtils.getPath(p.toAbsolutePath());
                                 }
 
-                                if (true) {
+                                if (false) {
                                     var pathZip = save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
                                     char[] password = null;
                                     if (jBackupConfig.getGlobal().isCrypt()) {
@@ -69,13 +73,20 @@ public class BackupService {
 
                                     }
 
-                                } else {
+                                } else if (false) {
                                     try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
                                         ZipOutputStream zipOut = new ZipOutputStream(fos);
 
                                         save(zipOut, p, "", save);
 
                                         zipOut.close();
+                                    }
+                                } else {
+                                    String filename;
+                                    filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip");
+                                    try (Compress compress = buildCompress(filename, save)) {
+                                        compress.start();
+                                        save3(compress, p, "", save);
                                     }
                                 }
                             }
@@ -87,6 +98,48 @@ public class BackupService {
             LOGGER.info("backup OK");
         } catch (Exception e) {
             LOGGER.error("Error", e);
+        }
+    }
+
+    private Compress buildCompress(String filename, SaveConfig save) {
+        Compress compress;
+        if (false) {
+            compress = new CompressZip(filename);
+        } else {
+            compress = new CompressZip4j(filename,
+                    jBackupConfig.getGlobal().isCrypt(),
+                    jBackupConfig.getGlobal().getPassword());
+        }
+        return compress;
+    }
+
+    private void save3(Compress compress, Path p, String directory, SaveConfig save) {
+        try (var listFiles = Files.list(p)) {
+            listFiles.forEach(x -> {
+                if (exclude(x, save)) {
+                    LOGGER.debug("ignore {}", x);
+                } else {
+                    if (Files.isDirectory(x)) {
+                        var dir = PathUtils.getPath(directory, x.getFileName().toString());
+//                        if (StringUtils.hasText(directory)) {
+//                            dir = directory + "/" + x.getFileName();
+//                        } else {
+//                            dir = x.getFileName().toString();
+//                        }
+                        save3(compress, x, dir, save);
+                    } else {
+                        if (include(x, save)) {
+                            //addFile(zipOut, directory, x);
+                            var dir = PathUtils.getPath(directory, x.getFileName().toString());
+                            compress.addFile(dir, x);
+                        } else {
+                            LOGGER.debug("not include {}", x);
+                        }
+                    }
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException("Error for save", e);
         }
     }
 
