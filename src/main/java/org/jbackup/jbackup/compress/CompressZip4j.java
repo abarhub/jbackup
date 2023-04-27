@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class CompressZip4j implements Compress {
+public class CompressZip4j implements CompressWalk {
 
     private final String path;
 

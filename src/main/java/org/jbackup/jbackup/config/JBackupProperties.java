@@ -7,24 +7,24 @@ import java.util.Map;
 
 @Component
 @ConfigurationProperties("jbackup")
-public class JBackupConfig {
+public class JBackupProperties {
 
-    private GlobalConfig global;
-    private Map<String, SaveConfig> dir;
+    private GlobalProperties global;
+    private Map<String, SaveProperties> dir;
 
-    public GlobalConfig getGlobal() {
+    public GlobalProperties getGlobal() {
         return global;
     }
 
-    public void setGlobal(GlobalConfig global) {
+    public void setGlobal(GlobalProperties global) {
         this.global = global;
     }
 
-    public Map<String, SaveConfig> getDir() {
+    public Map<String, SaveProperties> getDir() {
         return dir;
     }
 
-    public void setDir(Map<String, SaveConfig> dir) {
+    public void setDir(Map<String, SaveProperties> dir) {
         this.dir = dir;
     }
 }

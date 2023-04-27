@@ -6,11 +6,11 @@ import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.CompressionLevel;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
-import org.jbackup.jbackup.compress.Compress;
-import org.jbackup.jbackup.compress.CompressZip;
-import org.jbackup.jbackup.compress.CompressZip4j;
-import org.jbackup.jbackup.config.JBackupConfig;
-import org.jbackup.jbackup.config.SaveConfig;
+import org.jbackup.jbackup.compress.*;
+import org.jbackup.jbackup.config.CompressType;
+import org.jbackup.jbackup.config.GlobalProperties;
+import org.jbackup.jbackup.config.JBackupProperties;
+import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
 import org.jbackup.jbackup.utils.PathUtils;
@@ -31,23 +31,24 @@ import java.time.Instant;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+
 @Service
 public class BackupService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupService.class);
 
-    private final JBackupConfig jBackupConfig;
+    private final JBackupProperties jBackupProperties;
 
-    public BackupService(JBackupConfig jBackupConfig) {
-        this.jBackupConfig = jBackupConfig;
+    public BackupService(JBackupProperties jBackupProperties) {
+        this.jBackupProperties = jBackupProperties;
     }
 
     public void backup() {
         try {
             LOGGER.info("backup ...");
-            if (jBackupConfig.getDir() != null && !jBackupConfig.getDir().isEmpty()) {
+            if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
                 try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
-                    for (var entry : jBackupConfig.getDir().entrySet()) {
+                    for (var entry : jBackupProperties.getDir().entrySet()) {
                         var save = entry.getValue();
                         if (save.isDisabled()) {
                             LOGGER.info("backup {} disabled", entry.getKey());
@@ -64,8 +65,8 @@ public class BackupService {
                                 if (false) {
                                     var pathZip = save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
                                     char[] password = null;
-                                    if (jBackupConfig.getGlobal().isCrypt()) {
-                                        password = jBackupConfig.getGlobal().getPassword().toCharArray();
+                                    if (jBackupProperties.getGlobal().isCrypt()) {
+                                        password = jBackupProperties.getGlobal().getPassword().toCharArray();
                                     }
                                     try (ZipFile zipFile = new ZipFile(pathZip, password)) {
 
@@ -83,10 +84,16 @@ public class BackupService {
                                     }
                                 } else {
                                     String filename;
-                                    filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip");
-                                    try (Compress compress = buildCompress(filename, save)) {
+                                    String extension = getExtension(jBackupProperties.getGlobal());
+                                    filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + extension);
+                                    try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
                                         compress.start();
-                                        save3(compress, p, "", save);
+                                        if (compress instanceof CompressWalk compressWalk) {
+                                            save3(compressWalk, p, "", save);
+                                        } else {
+                                            var compressTask = (CompressTask) compress;
+                                            compressTask.task(p);
+                                        }
                                     }
                                 }
                             }
@@ -101,19 +108,34 @@ public class BackupService {
         }
     }
 
-    private Compress buildCompress(String filename, SaveConfig save) {
-        Compress compress;
-        if (false) {
-            compress = new CompressZip(filename);
+    private String getExtension(GlobalProperties global) {
+        if (global.getCompress() == CompressType.SEVENZIP) {
+            return ".7z";
         } else {
+            return ".zip";
+        }
+    }
+
+    private Compress buildCompress(String filename, SaveProperties save, GlobalProperties global) {
+        Compress compress;
+        if (global.getCompress() == null || global.getCompress() == CompressType.ZIP) {
+            compress = new CompressZip(filename);
+        } else if (global.getCompress() == CompressType.ZIP4J) {
             compress = new CompressZip4j(filename,
-                    jBackupConfig.getGlobal().isCrypt(),
-                    jBackupConfig.getGlobal().getPassword());
+                    jBackupProperties.getGlobal().isCrypt(),
+                    jBackupProperties.getGlobal().getPassword());
+        } else if (global.getCompress() == CompressType.SEVENZIP) {
+            if(!filename.endsWith("/")&&!filename.endsWith("\\")){
+                filename=filename+"/";
+            }
+            compress = new CompressSevenZip(filename, jBackupProperties.getGlobal(), save);
+        } else {
+            throw new JBackupException("Invalid value for compress: " + global.getCompress());
         }
         return compress;
     }
 
-    private void save3(Compress compress, Path p, String directory, SaveConfig save) {
+    private void save3(CompressWalk compress, Path p, String directory, SaveProperties save) {
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
@@ -149,7 +171,7 @@ public class BackupService {
         return isWindows;
     }
 
-    private void save2(ZipFile zipOut, Path p, String directory, SaveConfig save) {
+    private void save2(ZipFile zipOut, Path p, String directory, SaveProperties save) {
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
@@ -179,7 +201,7 @@ public class BackupService {
                                 zipParameters.setLastModifiedFileTime(lastModified.toMillis());
                                 zipParameters.setCompressionLevel(CompressionLevel.MAXIMUM);
                                 zipParameters.setCompressionMethod(CompressionMethod.STORE);
-                                if (jBackupConfig.getGlobal().isCrypt()) {
+                                if (jBackupProperties.getGlobal().isCrypt()) {
                                     zipParameters.setEncryptFiles(true);
                                     zipParameters.setEncryptionMethod(EncryptionMethod.AES);
                                     zipParameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
@@ -199,7 +221,7 @@ public class BackupService {
         }
     }
 
-    private void save(ZipOutputStream zipOut, Path p, String directory, SaveConfig save) {
+    private void save(ZipOutputStream zipOut, Path p, String directory, SaveProperties save) {
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
@@ -250,9 +272,9 @@ public class BackupService {
         }
     }
 
-    private boolean exclude(Path path, SaveConfig saveConfig) {
-        if (!CollectionUtils.isEmpty(saveConfig.getExclude())) {
-            for (var glob : saveConfig.getExclude()) {
+    private boolean exclude(Path path, SaveProperties saveProperties) {
+        if (!CollectionUtils.isEmpty(saveProperties.getExclude())) {
+            for (var glob : saveProperties.getExclude()) {
                 try {
                     PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
                     if (pathMatcher.matches(path)) {
@@ -266,9 +288,9 @@ public class BackupService {
         return false;
     }
 
-    private boolean include(Path path, SaveConfig saveConfig) {
-        if (!CollectionUtils.isEmpty(saveConfig.getInclude())) {
-            for (var glob : saveConfig.getInclude()) {
+    private boolean include(Path path, SaveProperties saveProperties) {
+        if (!CollectionUtils.isEmpty(saveProperties.getInclude())) {
+            for (var glob : saveProperties.getInclude()) {
                 try {
                     PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
                     if (pathMatcher.matches(path)) {

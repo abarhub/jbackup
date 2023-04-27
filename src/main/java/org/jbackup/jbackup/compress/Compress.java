@@ -8,6 +8,4 @@ public interface Compress extends AutoCloseable{
 
     void close();
 
-    void addFile(String name, Path p);
-
 }

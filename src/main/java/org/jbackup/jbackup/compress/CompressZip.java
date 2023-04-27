@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-public class CompressZip implements Compress {
+public class CompressZip implements CompressWalk {
 
     private final String path;
     private FileOutputStream fos;

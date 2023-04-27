@@ -2,7 +2,7 @@ package org.jbackup.jbackup.config;
 
 import java.util.List;
 
-public class SaveConfig {
+public class SaveProperties {
 
     private List<String> path;
 

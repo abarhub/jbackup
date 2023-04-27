@@ -2,9 +2,9 @@ package org.jbackup.jbackup.config;
 
 import org.springframework.util.unit.DataSize;
 
-public class GlobalConfig {
+public class GlobalProperties {
 
-    private String compress;
+    private CompressType compress;
 
     private boolean verbose;
 
@@ -14,11 +14,13 @@ public class GlobalConfig {
 
     private DataSize splitSize;
 
-    public String getCompress() {
+    private String path7zip;
+
+    public CompressType getCompress() {
         return compress;
     }
 
-    public void setCompress(String compress) {
+    public void setCompress(CompressType compress) {
         this.compress = compress;
     }
 
@@ -52,5 +54,13 @@ public class GlobalConfig {
 
     public void setSplitSize(DataSize splitSize) {
         this.splitSize = splitSize;
+    }
+
+    public String getPath7zip() {
+        return path7zip;
+    }
+
+    public void setPath7zip(String path7zip) {
+        this.path7zip = path7zip;
     }
 }
