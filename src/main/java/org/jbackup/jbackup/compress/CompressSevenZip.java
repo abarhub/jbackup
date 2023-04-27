@@ -1,5 +1,6 @@
 package org.jbackup.jbackup.compress;
 
+import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.config.GlobalProperties;
 import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
@@ -7,6 +8,7 @@ import org.jbackup.jbackup.utils.SevenZipUtils;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 public class CompressSevenZip implements CompressTask {
@@ -38,7 +40,21 @@ public class CompressSevenZip implements CompressTask {
     public void task(Path p) {
         try {
             Path dest = Path.of(path);
-            sevenZipUtils.compression(p, dest, List.of(), global.isCrypt(), global.getPassword());
+            List<String> exclude=new ArrayList<>();
+            for(var s:save.getExclude()){
+                if(StringUtils.isNotBlank(s)) {
+                    s = s.replaceAll("\\*\\*", "*");
+                    exclude.add(s);
+                }
+            }
+            List<String> include=new ArrayList<>();
+            for(var s:save.getInclude()){
+                if(StringUtils.isNotBlank(s)) {
+                    s = s.replaceAll("\\*\\*", "*");
+                    include.add(s);
+                }
+            }
+            sevenZipUtils.compression(p, dest, exclude, include,global.isCrypt(), global.getPassword());
         } catch (IOException | InterruptedException e) {
             throw new JBackupException("Error for compress " + save.getPath(), e);
         }

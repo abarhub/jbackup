@@ -14,8 +14,9 @@ jbackup:
       #path: D:/temp/amdfx
       path: D:/temp/apache-tomcat-9.0.30/
       dest: D:/temp/backup_test
-      include:
+      #include:
       #include: '**/*.txt,**/*.jsp'
+      include: '*.txt'
       exclude:
       #exclude: '**/*.html'
       disabled: false

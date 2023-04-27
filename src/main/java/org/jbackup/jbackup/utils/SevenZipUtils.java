@@ -7,12 +7,9 @@ import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
-
 import org.jbackup.jbackup.shadowcopy.StreamGobbler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -33,10 +30,10 @@ public class SevenZipUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SevenZipUtils.class);
 
-//    @Value("${path-sevenzip:}")
+    //    @Value("${path-sevenzip:}")
     private String pathSevenZip;
 
-//    @Value("${volume-size:}")
+    //    @Value("${volume-size:}")
     private String volumeSize;
 
     private ExecutorService executorService;
@@ -63,7 +60,7 @@ public class SevenZipUtils {
     }
 
     public void compress(VFS4JPathName source, VFS4JPathName destination, List<String> exclude,
-                         boolean crypt, String password) throws IOException, InterruptedException, DecoderException {
+                         List<String> include, boolean crypt, String password) throws IOException, InterruptedException, DecoderException {
 
         if (!StringUtils.hasText(pathSevenZip)) {
             throw new IllegalArgumentException("config 'path-sevenzip' empty");
@@ -73,7 +70,7 @@ public class SevenZipUtils {
         Path sourceFile = filemanager.getRealFile(source);
         Path destinationFile = filemanager.getRealFile(destination);
 
-        var dest = compression(sourceFile, destinationFile, exclude, crypt, password);
+        var dest = compression(sourceFile, destinationFile, exclude, include, crypt, password);
 
         verifieFichier(dest, crypt, password);
 
@@ -92,7 +89,7 @@ public class SevenZipUtils {
     }
 
     public Path compression(Path sourceFile, Path destinationFile, List<String> exclude,
-                             boolean crypt, String password) throws IOException, InterruptedException {
+                            List<String> include, boolean crypt, String password) throws IOException, InterruptedException {
 
         final List<String> listeResultat = new Vector<>();
         Consumer<String> consumer = (x) -> {
@@ -109,6 +106,13 @@ public class SevenZipUtils {
                 }
             }
         }
+        if (!CollectionUtils.isEmpty(include)) {
+            for (var inc : include) {
+                if (StringUtils.hasText(inc)) {
+                    listParameter.add("-ir!" + inc);
+                }
+            }
+        }
         if (crypt) {
             if (StringUtils.hasText(password)) {
                 listParameter.add("-p" + password);
@@ -120,7 +124,11 @@ public class SevenZipUtils {
             listParameter.add("-v" + volumeSize);
         }
         listParameter.add(destinationFile.toString());
-        listParameter.add(sourceFile.toString());
+        var s = sourceFile.toString();
+        if (!s.endsWith("/") && !s.endsWith("\\")) {
+            s += "\\.";
+        }
+        listParameter.add(s);
         int res = runCommand(consumer, listParameter.toArray(new String[0]));
         LOGGER.info("res exec: {}", res);
         if (res != 0) {

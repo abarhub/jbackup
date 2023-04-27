@@ -125,9 +125,9 @@ public class BackupService {
                     jBackupProperties.getGlobal().isCrypt(),
                     jBackupProperties.getGlobal().getPassword());
         } else if (global.getCompress() == CompressType.SEVENZIP) {
-            if(!filename.endsWith("/")&&!filename.endsWith("\\")){
-                filename=filename+"/";
-            }
+//            if(!filename.endsWith("/")&&!filename.endsWith("\\")){
+//                filename=filename+"/";
+//            }
             compress = new CompressSevenZip(filename, jBackupProperties.getGlobal(), save);
         } else {
             throw new JBackupException("Invalid value for compress: " + global.getCompress());
