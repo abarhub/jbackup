@@ -151,7 +151,7 @@ public class SevenZipUtils {
         return destinationFile;
     }
 
-    private void verifieFichier(Path destinationFile, boolean crypt, String password) throws IOException, InterruptedException {
+    public void verifieFichier(Path destinationFile, boolean crypt, String password) throws IOException, InterruptedException {
         if (destinationFile == null) {
             throw new IllegalArgumentException("path null");
         }

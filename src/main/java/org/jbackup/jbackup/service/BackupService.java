@@ -17,6 +17,7 @@ import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
 import org.jbackup.jbackup.utils.AESCrypt;
 import org.jbackup.jbackup.utils.PathUtils;
+import org.jbackup.jbackup.utils.SevenZipUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,9 +33,7 @@ import java.nio.file.PathMatcher;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -118,25 +117,138 @@ public class BackupService {
 
     private void terminate(String file) {
         var listFiles = crypt(file);
-        calculateHash(listFiles, file);
+        var fileHash = calculateHash(listFiles, file);
+        checkFiles(file, listFiles, fileHash);
     }
 
-    private void calculateHash(List<String> listFiles, String file) {
+    private void checkFiles(String file, List<String> listFiles, Path fileHash) {
+        LOGGER.atInfo().log("Check files ...");
+        Map<String, String> hash = new HashMap<>();
+        try {
+            var list = Files.readAllLines(fileHash);
+            if (!CollectionUtils.isEmpty(list)) {
+                int noline = 0;
+                for (var s : list) {
+                    var i = s.indexOf(' ');
+                    if (i < 0) {
+                        throw new JBackupException("has file invalid (i=" + i + ",noline=" + noline + ")");
+                    }
+                    var hashHexa = s.substring(0, i);
+                    var filename = s.substring(i + 1);
+                    hash.put(filename, hashHexa);
+                    noline++;
+                }
+            }
+        } catch (IOException e) {
+            throw new JBackupException("Error for read hash", e);
+        }
+        for (var p : listFiles) {
+            if (p.endsWith(".crp")) {
+                Path fileNotCrypted = Path.of(p.substring(0, p.length() - 4));
+                if (Files.notExists(fileNotCrypted)) {
+                    throw new JBackupException("File '" + fileNotCrypted + "' not exist");
+                }
+                try {
+                    Path fileDecrypted = null;
+                    try {
+                        fileDecrypted = Files.createTempFile("jbackup", "tmp");
+                        AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
+                        crypt.decrypt(p, fileDecrypted.toString());
+                        var len = Files.mismatch(fileDecrypted, fileDecrypted);
+                        if (len != -1) {
+                            throw new JBackupException("file not same (" + fileDecrypted + "," + p + ")");
+                        } else {
+                            LOGGER.atInfo().log("file {} decrypt ok", p);
+                        }
+
+                        var s = fileNotCrypted.getFileName().toString();
+                        if (hash.containsKey(s)) {
+                            var hashRef = hash.get(s);
+                            String sha3Hex = new DigestUtils("SHA-256").digestAsHex(fileNotCrypted);
+                            if (Objects.equals(hashRef, sha3Hex)) {
+                                LOGGER.info("hash ok for {}", s);
+                            } else {
+                                LOGGER.atError().log("Invalide hash for {} ('{}'<>'{}')", s, hashRef, sha3Hex);
+                                throw new JBackupException("Invalide hash for " + fileNotCrypted + " ( '" + hashRef + "','" + sha3Hex + "'");
+                            }
+                        }
+
+                        if (fileNotCrypted.toString().endsWith(".zip")) {
+                            LOGGER.atInfo().log("Check zip file {} ...", fileNotCrypted);
+                            checkZip(fileNotCrypted);
+                            LOGGER.atInfo().log("Check zip file {} OK", fileNotCrypted);
+                        } else {
+                            LOGGER.atWarn().log("Check file {} ignored", fileNotCrypted);
+                        }
+
+                    } finally {
+                        if (fileDecrypted != null) {
+                            Files.delete(fileDecrypted);
+                        }
+                    }
+                } catch (IOException | GeneralSecurityException e) {
+                    throw new JBackupException("Error for decrypt file " + p, e);
+                }
+                var p2 = Path.of(p);
+                var s = p2.getFileName().toString();
+                if (hash.containsKey(s)) {
+                    try {
+                        var hashRef = hash.get(s);
+                        String sha3Hex = new DigestUtils("SHA-256").digestAsHex(p2);
+                        if (Objects.equals(hashRef, sha3Hex)) {
+                            LOGGER.info("hash ok for {}", p);
+                        } else {
+                            LOGGER.atError().log("Invalide hash for {} ('{}'<>'{}') (size={})", p, hashRef, sha3Hex, Files.size(p2));
+                            throw new JBackupException("Invalide hash for " + p + " ( '" + hashRef + "','" + sha3Hex + "'");
+                        }
+                    } catch (IOException e) {
+                        throw new JBackupException("Error for calculate hash for file " + s);
+                    }
+                } else {
+                    throw new JBackupException("Hash not found for file " + s + " in " + fileHash);
+                }
+            } else {
+                LOGGER.atWarn().log("file {} ignored", p);
+            }
+
+        }
+        LOGGER.atInfo().log("Check files OK");
+    }
+
+    private void checkZip(Path zip){
+        try {
+            SevenZipUtils sevenZipUtils = new SevenZipUtils(jBackupProperties.getGlobal().getPath7zip(), null);
+            try {
+                sevenZipUtils.init();
+                sevenZipUtils.verifieFichier(zip, true, jBackupProperties.getGlobal().getPassword());
+            }finally {
+                sevenZipUtils.terminate();
+            }
+        } catch (IOException | InterruptedException e) {
+            throw new JBackupException("Error for check of file " + zip, e);
+        }
+    }
+
+    private Path calculateHash(List<String> listFiles, String file) {
         var name = FilenameUtils.removeExtension(file);
         var f = Path.of(name + ".sha256");
         List<String> liste = new ArrayList<>();
         try {
+            DigestUtils digest = new DigestUtils("SHA-256");
             for (var p : listFiles) {
+                LOGGER.atInfo().log("calculate hash for file {}", p);
                 Path p2 = Path.of(p);
-                String sha3Hex = new DigestUtils("SHA-256").digestAsHex(p2);
+                String sha3Hex = digest.digestAsHex(p2);
                 var s = sha3Hex + " " + p2.getFileName();
+                LOGGER.info("hash {} for {} ({})", sha3Hex, p2.getFileName(), Files.size(p2));
                 liste.add(s);
             }
             Files.write(f, liste);
         } catch (IOException e) {
             throw new JBackupException("error for calculate hash");
         }
-
+        LOGGER.atInfo().log("file {} created", f);
+        return f;
     }
 
     private List<String> crypt(String file) {
