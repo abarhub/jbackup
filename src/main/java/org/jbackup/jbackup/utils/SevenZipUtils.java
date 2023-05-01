@@ -128,6 +128,9 @@ public class SevenZipUtils {
         if (!s.endsWith("/") && !s.endsWith("\\")) {
             s += "\\.";
         }
+        if(s.startsWith("\\\\.\\")){
+            s="\\\\?\\"+s.substring(4);
+        }
         listParameter.add(s);
         int res = runCommand(consumer, listParameter.toArray(new String[0]));
         LOGGER.info("res exec: {}", res);
