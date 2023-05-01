@@ -6,4 +6,6 @@ public interface CompressWalk extends Compress{
 
     void addFile(String name, Path p);
 
+    void addDir(String name, Path p);
+
 }

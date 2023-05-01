@@ -126,9 +126,6 @@ public class BackupService {
                     jBackupProperties.getGlobal().isCrypt(),
                     jBackupProperties.getGlobal().getPassword());
         } else if (global.getCompress() == CompressType.SEVENZIP) {
-//            if(!filename.endsWith("/")&&!filename.endsWith("\\")){
-//                filename=filename+"/";
-//            }
             compress = new CompressSevenZip(filename, jBackupProperties.getGlobal(), save);
         } else if (global.getCompress() == CompressType.ZIPAPACHE) {
             Optional<Long> splitSize;
@@ -152,15 +149,10 @@ public class BackupService {
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
-//                        if (StringUtils.hasText(directory)) {
-//                            dir = directory + "/" + x.getFileName();
-//                        } else {
-//                            dir = x.getFileName().toString();
-//                        }
+                        compress.addDir(dir,x);
                         save3(compress, x, dir, save);
                     } else {
                         if (include(x, save)) {
-                            //addFile(zipOut, directory, x);
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
                         } else {

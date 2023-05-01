@@ -70,4 +70,9 @@ public class CompressZip4j implements CompressWalk {
             throw new JBackupException("Error for add file " + p, e);
         }
     }
+
+    @Override
+    public void addDir(String name, Path p) {
+
+    }
 }

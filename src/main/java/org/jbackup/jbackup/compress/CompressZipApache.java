@@ -58,7 +58,6 @@ public class CompressZipApache implements CompressWalk {
     @Override
     public void addFile(String name, Path p) {
         try {
-//        File file_1 = p.toFile();//new File("compress-me/file-to-compress-1.txt");
             ZipArchiveEntry entry_1 = new ZipArchiveEntry(p, name);
             archive.putArchiveEntry(entry_1);
             try (var input = Files.newInputStream(p)) {
@@ -67,6 +66,17 @@ public class CompressZipApache implements CompressWalk {
             archive.closeArchiveEntry();
         } catch (IOException e) {
             throw new JBackupException("Error for add file " + name, e);
+        }
+    }
+
+    @Override
+    public void addDir(String name, Path p) {
+        try {
+            ZipArchiveEntry entry_1 = new ZipArchiveEntry(p, name);
+            archive.putArchiveEntry(entry_1);
+            archive.closeArchiveEntry();
+        } catch (IOException e) {
+            throw new JBackupException("Error for add dir " + name, e);
         }
     }
 }

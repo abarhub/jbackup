@@ -48,11 +48,6 @@ public class CompressZip implements CompressWalk {
         try {
             try (var fis = Files.newInputStream(p)) {
                 var dir = name;
-//                if (StringUtils.hasText(directory)) {
-//                    dir = directory + "/" + x.getFileName();
-//                } else {
-//                    dir = x.getFileName().toString();
-//                }
                 ZipEntry zipEntry = new ZipEntry(dir);
                 zipOut.putNextEntry(zipEntry);
 
@@ -65,5 +60,10 @@ public class CompressZip implements CompressWalk {
         } catch (IOException e) {
             throw new JBackupException("error for add file " + p, e);
         }
+    }
+
+    @Override
+    public void addDir(String name, Path p) {
+
     }
 }
