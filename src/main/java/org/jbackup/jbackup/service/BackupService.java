@@ -13,6 +13,7 @@ import org.jbackup.jbackup.config.JBackupProperties;
 import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
+import org.jbackup.jbackup.utils.AESCrypt;
 import org.jbackup.jbackup.utils.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,8 +27,11 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -96,6 +100,7 @@ public class BackupService {
                                             compressTask.task(p);
                                         }
                                     }
+                                    terminate(filename);
                                 }
                             }
                             LOGGER.info("backup {} ok ({})", entry.getKey(), Duration.between(debut, Instant.now()));
@@ -107,6 +112,46 @@ public class BackupService {
         } catch (Exception e) {
             LOGGER.error("Error", e);
         }
+    }
+
+    private void terminate(String file) {
+        List<String> listeFiles = new ArrayList<>();
+        listeFiles.add(file);
+        var p = Path.of(file);
+        if (Files.exists(p)) {
+            try {
+                var fileCrypt = p.toString() + ".crp";
+                listeFiles.add(fileCrypt);
+                AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
+                crypt.encrypt(2, p.toString(), fileCrypt);
+            } catch (IOException | GeneralSecurityException e) {
+                throw new JBackupException("Error for crypt", e);
+            }
+        }
+        List<Path> liste;
+        try {
+            liste = Files.list(p.getParent())
+                    .filter(x -> {
+                        var x1 = x.getFileName().toString();
+                        var x2 = p.getFileName().toString();
+                        return x1.startsWith(x2 + ".z") || x1.startsWith(x2 + ".Z");
+                    })
+                    .toList();
+        } catch (IOException e) {
+            throw new JBackupException("Error for list files", e);
+        }
+        for (var p3 : liste) {
+            try {
+                listeFiles.add(p3.toString());
+                var fileCrypt = p3 + ".crp";
+                listeFiles.add(fileCrypt);
+                AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
+                crypt.encrypt(2, p3.toString(), fileCrypt);
+            } catch (IOException | GeneralSecurityException e) {
+                throw new JBackupException("Error for crypt", e);
+            }
+        }
+        LOGGER.info("liste files={}", listeFiles);
     }
 
     private String getExtension(GlobalProperties global) {
@@ -149,7 +194,7 @@ public class BackupService {
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
-                        compress.addDir(dir,x);
+                        compress.addDir(dir, x);
                         save3(compress, x, dir, save);
                     } else {
                         if (include(x, save)) {
