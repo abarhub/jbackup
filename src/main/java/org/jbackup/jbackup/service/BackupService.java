@@ -6,6 +6,8 @@ import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.CompressionLevel;
 import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.FilenameUtils;
 import org.jbackup.jbackup.compress.*;
 import org.jbackup.jbackup.config.CompressType;
 import org.jbackup.jbackup.config.GlobalProperties;
@@ -115,12 +117,35 @@ public class BackupService {
     }
 
     private void terminate(String file) {
+        var listFiles = crypt(file);
+        calculateHash(listFiles, file);
+    }
+
+    private void calculateHash(List<String> listFiles, String file) {
+        var name = FilenameUtils.removeExtension(file);
+        var f = Path.of(name + ".sha256");
+        List<String> liste = new ArrayList<>();
+        try {
+            for (var p : listFiles) {
+                Path p2 = Path.of(p);
+                String sha3Hex = new DigestUtils("SHA-256").digestAsHex(p2);
+                var s = sha3Hex + " " + p2.getFileName();
+                liste.add(s);
+            }
+            Files.write(f, liste);
+        } catch (IOException e) {
+            throw new JBackupException("error for calculate hash");
+        }
+
+    }
+
+    private List<String> crypt(String file) {
         List<String> listeFiles = new ArrayList<>();
         listeFiles.add(file);
         var p = Path.of(file);
         if (Files.exists(p)) {
             try {
-                var fileCrypt = p.toString() + ".crp";
+                var fileCrypt = p + ".crp";
                 listeFiles.add(fileCrypt);
                 AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
                 crypt.encrypt(2, p.toString(), fileCrypt);
@@ -152,6 +177,7 @@ public class BackupService {
             }
         }
         LOGGER.info("liste files={}", listeFiles);
+        return listeFiles;
     }
 
     private String getExtension(GlobalProperties global) {
