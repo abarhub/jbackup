@@ -95,7 +95,9 @@ public class BackupService {
                                     try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
                                         compress.start();
                                         if (compress instanceof CompressWalk compressWalk) {
+                                            LOGGER.atInfo().log("compress {} ...",p);
                                             save3(compressWalk, p, "", save);
+                                            LOGGER.atInfo().log("compress {} OK",p);
                                         } else {
                                             var compressTask = (CompressTask) compress;
                                             compressTask.task(p);
