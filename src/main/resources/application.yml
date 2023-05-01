@@ -3,20 +3,22 @@ jbackup:
   global:
     #compress: zip
     #compress: zip4j
-    compress: sevenzip
+    #compress: sevenzip
+    compress: zipapache
     verbose: false
     crypt: true
     password: 12345
     splitSize:
+    #splitSize: 35MB
     path7zip: "C:/Program Files/7-Zip/7z.exe"
   dir:
     test1:
       #path: D:/temp/amdfx
       path: D:/temp/apache-tomcat-9.0.30/
       dest: D:/temp/backup_test
-      #include:
+      include:
       #include: '**/*.txt,**/*.jsp'
-      include: '*.txt'
+      #include: '*.txt'
       exclude:
       #exclude: '**/*.html'
       disabled: false

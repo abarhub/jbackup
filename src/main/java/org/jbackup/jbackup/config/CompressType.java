@@ -4,6 +4,7 @@ public enum CompressType {
 
     ZIP,
     ZIP4J,
-    SEVENZIP
+    SEVENZIP,
+    ZIPAPACHE
 
 }

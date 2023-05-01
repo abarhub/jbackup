@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -129,6 +130,14 @@ public class BackupService {
 //                filename=filename+"/";
 //            }
             compress = new CompressSevenZip(filename, jBackupProperties.getGlobal(), save);
+        } else if (global.getCompress() == CompressType.ZIPAPACHE) {
+            Optional<Long> splitSize;
+            if (global.getSplitSize() != null) {
+                splitSize = Optional.of(global.getSplitSize().toBytes());
+            } else {
+                splitSize = Optional.empty();
+            }
+            compress = new CompressZipApache(filename, splitSize);
         } else {
             throw new JBackupException("Invalid value for compress: " + global.getCompress());
         }
