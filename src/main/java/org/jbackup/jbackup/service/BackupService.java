@@ -354,7 +354,7 @@ public class BackupService {
     private boolean isShadowCopy() {
         boolean isWindows = System.getProperty("os.name")
                 .toLowerCase().startsWith("windows");
-        return isWindows;
+        return jBackupProperties.getGlobal().isShadowCopy()&&isWindows;
     }
 
     private void save2(ZipFile zipOut, Path p, String directory, SaveProperties save) {

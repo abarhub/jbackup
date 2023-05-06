@@ -16,6 +16,8 @@ public class GlobalProperties {
 
     private String path7zip;
 
+    private boolean shadowCopy;
+
     public CompressType getCompress() {
         return compress;
     }
@@ -62,5 +64,13 @@ public class GlobalProperties {
 
     public void setPath7zip(String path7zip) {
         this.path7zip = path7zip;
+    }
+
+    public boolean isShadowCopy() {
+        return shadowCopy;
+    }
+
+    public void setShadowCopy(boolean shadowCopy) {
+        this.shadowCopy = shadowCopy;
     }
 }

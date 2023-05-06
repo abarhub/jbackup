@@ -11,6 +11,7 @@ jbackup:
     splitSize:
     #splitSize: 35MB
     path7zip: "C:/Program Files/7-Zip/7z.exe"
+    shadowCopy: true
   dir:
     test1:
       #path: D:/temp/amdfx
