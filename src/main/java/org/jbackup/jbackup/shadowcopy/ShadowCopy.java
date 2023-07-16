@@ -22,7 +22,7 @@ public class ShadowCopy implements AutoCloseable {
     private final Map<Character, ShadowPath> map = new ConcurrentHashMap<>();
 
     public Path getPath(Path path) {
-        Assert.isTrue(path.isAbsolute(),"Path '"+path+"' must be absolute");
+        Assert.isTrue(path.isAbsolute(), "Path '" + path + "' must be absolute");
         var root = path.getRoot();
         LOGGER.info("root={},path={}", root, path);
         var s = root.toString();
@@ -38,7 +38,7 @@ public class ShadowCopy implements AutoCloseable {
                 }
                 var p2 = convertPath(p, path);
                 if (p2 != null) {
-                    LOGGER.info("{} -> {}",path,p2);
+                    LOGGER.info("{} -> {}", path, p2);
                     path = p2;
                 }
             }
@@ -47,10 +47,10 @@ public class ShadowCopy implements AutoCloseable {
     }
 
     private Path convertPath(ShadowPath p, Path path) {
-        var s=path.toString();
-        var s2=p.path().toString();
-        s=s.substring(2);
-        var s3=s2+s;
+        var s = path.toString();
+        var s2 = p.path().toString();
+        s = s.substring(2);
+        var s3 = s2 + s;
 //        if(s3.startsWith("\\\\?\\")){
 //            s3="\\\\.\\"+s3.substring(4);
 //        }
@@ -84,8 +84,10 @@ public class ShadowCopy implements AutoCloseable {
         try {
             LOGGER.info("create shadow copy for {} ...", volume);
             List<String> liste;
-            liste=run(List.of("powershell.exe", "-Command",
-                    "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')"),
+            var s = "";
+            s = "(gwmi -list win32_shadowcopy).Create('" + volume + ":\\','ClientAccessible')";
+            //s = "(Get-WmiObject -List Win32_ShadowCopy).Create('" + volume + ":\\', 'ClientAccessible')";
+            liste = run(List.of("powershell.exe", "-Command", s),
                     true);
             LOGGER.info("create shadow copy for {} OK", volume);
             return liste.stream()
@@ -122,11 +124,11 @@ public class ShadowCopy implements AutoCloseable {
             LOGGER.info("list shadow copy for {}({}) ...", volume, shadowId);
             List<String> liste;
             if (StringUtils.hasText(shadowId)) {
-                liste=run(List.of("powershell.exe",
-                        "Get-WmiObject Win32_ShadowCopy | Where-Object { $_.ID -eq '" + shadowId + "' } | Select DeviceObject"),
+                liste = run(List.of("powershell.exe",
+                                "Get-WmiObject Win32_ShadowCopy | Where-Object { $_.ID -eq '" + shadowId + "' } | Select DeviceObject"),
                         true);
             } else {
-                liste=run(List.of("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":"),
+                liste = run(List.of("cmd.exe", "/c", "vssadmin", "List", "Shadows", "/For=" + volume + ":"),
                         true);
             }
             LOGGER.info("list shadow copy for {} OK", volume);
@@ -143,6 +145,7 @@ public class ShadowCopy implements AutoCloseable {
     }
 
     private List<String> run(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        LOGGER.atInfo().log("run of : {}", commands);
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(commands);
         builder.directory(new File(System.getProperty("user.home")));
@@ -155,7 +158,11 @@ public class ShadowCopy implements AutoCloseable {
         Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
         Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
         int exitCode = process.waitFor();
-        Assert.isTrue(exitCode == 0, "code retour=" + exitCode);
+        if (exitCode == 0) {
+            LOGGER.debug("Execution reussi");
+        } else {
+            throw new JBackupException("Erreur pour l'execution (code retour=" + exitCode + ")");
+        }
         future.get(10, TimeUnit.SECONDS);
         future2.get(10, TimeUnit.SECONDS);
         return liste.getList();
