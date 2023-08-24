@@ -50,12 +50,12 @@ public class BackupGithubService {
         final Instant instant = Instant.now();
         LOGGER.atInfo().log("date: {} ({}s)", instant, instant.getEpochSecond());
 
-//        enregistreUser(githubService, github, instant);
-//        enregistreEtoiles(githubService, github, instant);
+        enregistreUser(githubService, github, instant);
+        enregistreEtoiles(githubService, github, instant);
 
         enregistreProjets(github, githubService, instant);
 
-//        enregistreGist(githubService, github, instant);
+        enregistreGist(githubService, github, instant);
 
         LOGGER.atInfo().log("nb appels: {} (user:{}, repos:{}, started:{}, " +
                         "gist: {}, release: {}, git repos: {}, git gist: {})",
