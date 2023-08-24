@@ -30,6 +30,9 @@ jbackup:
     repos:
     token:
     apiVersion:
+    mirror: false
+    pageSize: 100
+    maxMemory: 10MB
     disabled: false
 
 

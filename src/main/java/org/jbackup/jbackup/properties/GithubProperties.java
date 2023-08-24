@@ -1,5 +1,7 @@
 package org.jbackup.jbackup.properties;
 
+import org.springframework.util.unit.DataSize;
+
 import java.util.List;
 
 public class GithubProperties {
@@ -10,7 +12,9 @@ public class GithubProperties {
     private List<String> repos;
     private String token;
     private String apiVersion;
-
+    private boolean mirror;
+    private int pageSize;
+    private DataSize maxMemory;
     private boolean disabled;
 
     public String getUser() {
@@ -59,6 +63,30 @@ public class GithubProperties {
 
     public void setApiVersion(String apiVersion) {
         this.apiVersion = apiVersion;
+    }
+
+    public boolean isMirror() {
+        return mirror;
+    }
+
+    public void setMirror(boolean mirror) {
+        this.mirror = mirror;
+    }
+
+    public int getPageSize() {
+        return pageSize;
+    }
+
+    public void setPageSize(int pageSize) {
+        this.pageSize = pageSize;
+    }
+
+    public DataSize getMaxMemory() {
+        return maxMemory;
+    }
+
+    public void setMaxMemory(DataSize maxMemory) {
+        this.maxMemory = maxMemory;
     }
 
     public boolean isDisabled() {
