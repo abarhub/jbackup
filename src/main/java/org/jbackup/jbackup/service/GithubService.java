@@ -10,16 +10,22 @@ import java.util.Map;
 
 public interface GithubService {
 
-    @GetExchange("/{user}/repos")
+    @GetExchange("/users/{user}/repos")
     Mono<ResponseEntity<String>> getRepos(@PathVariable String user, @RequestParam Map<String,Object> parametres);
 
-    @GetExchange("/{user}")
+    @GetExchange("/users/{user}")
     Mono<ResponseEntity<String>> getUser(@PathVariable String user);
 
-    @GetExchange("/{user}/starred")
+    @GetExchange("/users/{user}/starred")
     Mono<ResponseEntity<String>> getStarred(@PathVariable String user, @RequestParam Map<String,Object> parametres);
 
-    @GetExchange("/{user}/gists")
+    @GetExchange("/users/{user}/gists")
     Mono<ResponseEntity<String>> getGist(@PathVariable String user, @RequestParam Map<String,Object> parametres);
+
+    @GetExchange("/repos/{user}/{project}/releases")
+    Mono<ResponseEntity<String>> getRelease(@PathVariable String user, @PathVariable String project,
+                                         @RequestParam Map<String,Object> parametres);
+
+
 
 }

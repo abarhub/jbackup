@@ -26,7 +26,7 @@ jbackup:
   github:
     user:
     dest:
-    githubUrl: https://api.github.com/users
+    githubUrl: https://api.github.com
     repos:
     token:
     apiVersion:
@@ -34,5 +34,7 @@ jbackup:
     pageSize: 100
     maxMemory: 10MB
     disabled: false
+    connexionTimeout: 2m
+    readTimeout: 2m
 
 

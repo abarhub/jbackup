@@ -2,6 +2,7 @@ package org.jbackup.jbackup.properties;
 
 import org.springframework.util.unit.DataSize;
 
+import java.time.Duration;
 import java.util.List;
 
 public class GithubProperties {
@@ -16,6 +17,8 @@ public class GithubProperties {
     private int pageSize;
     private DataSize maxMemory;
     private boolean disabled;
+    private Duration connexionTimeout;
+    private Duration readTimeout;
 
     public String getUser() {
         return user;
@@ -95,5 +98,21 @@ public class GithubProperties {
 
     public void setDisabled(boolean disabled) {
         this.disabled = disabled;
+    }
+
+    public Duration getConnexionTimeout() {
+        return connexionTimeout;
+    }
+
+    public void setConnexionTimeout(Duration connexionTimeout) {
+        this.connexionTimeout = connexionTimeout;
+    }
+
+    public Duration getReadTimeout() {
+        return readTimeout;
+    }
+
+    public void setReadTimeout(Duration readTimeout) {
+        this.readTimeout = readTimeout;
     }
 }
