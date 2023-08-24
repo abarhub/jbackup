@@ -1,7 +1,6 @@
 package org.jbackup.jbackup.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -111,10 +110,8 @@ public class BackupGithubService {
                                     LOGGER.atInfo().log("{}: {} ({})", nom, url, urlClone);
                                 }
                             }
-                        } catch (JsonMappingException e) {
-                            throw new RuntimeException(e);
                         } catch (JsonProcessingException e) {
-                            throw new RuntimeException(e);
+                            throw new JBackupException("error for get json", e);
                         }
                     }
                     if (aucuneDonnees) {
@@ -133,6 +130,8 @@ public class BackupGithubService {
         LOGGER.atInfo().log("liste des projet: {}", listeProjet.stream().map(x -> x.getNom()).sorted().toList());
         LOGGER.atInfo().log("liste des projet2: {}", listeProjet.stream().map(x -> x.getNom()).sorted().collect(Collectors.toSet()));
 
+        var pathRoot = Path.of(github.getDest(), "repos");
+
         for (var projet : listeProjet) {
             var aTraiter = false;
             if (CollectionUtils.isEmpty(github.getRepos())) {
@@ -144,7 +143,7 @@ public class BackupGithubService {
             }
             if (aTraiter) {
                 LOGGER.info("traitement de {}", projet.getNom());
-                Path rep = Path.of(github.getDest(), "repos", projet.getNom());
+                Path rep = pathRoot.resolve(projet.getNom());
                 if (Files.notExists(rep.getParent())) {
                     try {
                         Files.createDirectories(rep.getParent());
@@ -152,21 +151,50 @@ public class BackupGithubService {
                         throw new JBackupException("Erreur pour créer le répertoire " + rep.getParent(), e);
                     }
                 }
-                updateGit(rep, projet.getNom(), projet.getCloneUrl());
-
+                var res = updateGit(rep, projet.getNom(), projet.getCloneUrl());
+                if (!res) {
+                    LOGGER.atError().log("Erreur pour mettre à jour le reporitory {}", rep);
+                    throw new JBackupException("Erreur pour mettre à jour le reporitory " + rep);
+                }
             }
         }
+
+        listeProjetsDifferents(listeProjet, pathRoot);
+
         LOGGER.atInfo().log("Enregistrement des projets OK");
     }
 
-    private static void updateGit(Path rep, String nom, String cloneUrl) {
+    private static void listeProjetsDifferents(List<Project> listeProjet, Path pathRoot) {
+        try {
+            var listeRemote = listeProjet.stream().map(x -> x.getNom()).toList();
+            var listeLocal = Files.list(pathRoot).map(x -> x.getFileName().toString()).toList();
+            LOGGER.atInfo().log("liste des projets en remote : {}", listeRemote);
+            LOGGER.atInfo().log("liste des projets en local : {}", listeLocal);
+            Set<String> liste1 = new TreeSet<>(listeRemote);
+            liste1.removeAll(listeLocal);
+            Set<String> liste2 = new TreeSet<>(listeLocal);
+            liste2.removeAll(listeRemote);
+            LOGGER.atInfo().log("liste des projets en remote en trop: {}", liste1);
+            LOGGER.atInfo().log("liste des projet en local en trop: {}", liste2);
+        } catch (IOException e) {
+            LOGGER.atError().log("Erreur pour liste les projets", e);
+        }
+    }
+
+    private static boolean updateGit(Path rep, String nom, String cloneUrl) {
         if (Files.exists(rep)) {
             try {
                 LOGGER.atInfo().log("pull {}", nom);
                 RunProgram runProgram = new RunProgram();
                 String[] tab = new String[]{"git", "-C", rep.toString(), "pull", "--all"};
-                var res = runProgram.runCommand(tab);
-                LOGGER.info("res={}", res);
+                var res = runProgram.runCommand(true, tab);
+                if (res != 0) {
+                    LOGGER.error("Erreur res={}", res);
+                    return false;
+                } else {
+                    LOGGER.info("res={}", res);
+                    return true;
+                }
             } catch (IOException | InterruptedException e) {
                 throw new JBackupException("Erreur pour executer le pull vers " + rep, e);
             }
@@ -174,9 +202,15 @@ public class BackupGithubService {
             try {
                 LOGGER.atInfo().log("clone {} ({})", nom, cloneUrl);
                 RunProgram runProgram = new RunProgram();
-                String[] tab = new String[]{"git", "clone",cloneUrl, rep.toString()};
+                String[] tab = new String[]{"git", "clone", cloneUrl, rep.toString()};
                 var res = runProgram.runCommand(true, tab);
-                LOGGER.info("res={}", res);
+                if (res != 0) {
+                    LOGGER.error("Erreur res={}", res);
+                    return false;
+                } else {
+                    LOGGER.info("res={}", res);
+                    return true;
+                }
             } catch (IOException | InterruptedException e) {
                 throw new JBackupException("Erreur pour executer le clone vers " + rep, e);
             }
@@ -294,7 +328,7 @@ public class BackupGithubService {
 
                         var rep = Paths.get(github.getDest(), "gist");
                         try {
-                            var rep3=rep.resolve("gist_meta");
+                            var rep3 = rep.resolve("gist_meta");
                             Files.createDirectories(rep3);
                             var path2 = rep3.resolve("gist_meta_" + instant.getEpochSecond() + "_" + no + ".json");
                             ObjectMapper mapper = new ObjectMapper()
@@ -317,12 +351,16 @@ public class BackupGithubService {
                                         var description = node.get("description").asText();
                                         if (StringUtils.isNotBlank(id)) {
                                             if (StringUtils.isNotBlank(urlPull)) {
-                                                var rep2 = rep.resolve(id).resolve("repo").resolve(id+".git");
+                                                var rep2 = rep.resolve(id).resolve("repo").resolve(id + ".git");
                                                 if (Files.notExists(rep2.getParent())) {
                                                     Files.createDirectories(rep2.getParent());
                                                 }
                                                 LOGGER.atInfo().log("mise à jour de {}", rep2);
-                                                updateGit(rep2, id, urlPull);
+                                                var res = updateGit(rep2, id, urlPull);
+                                                if (!res) {
+                                                    LOGGER.atError().log("Erreur pour mettre à jour le reporitory {}", rep2);
+                                                    throw new JBackupException("Erreur pour mettre à jour le reporitory " + rep);
+                                                }
                                             }
                                             if (StringUtils.isNotBlank(description)) {
                                                 var rep2 = rep.resolve(id).resolve("description.txt");
