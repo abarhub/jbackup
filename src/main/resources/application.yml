@@ -28,6 +28,8 @@ jbackup:
     dest:
     githubUrl: https://api.github.com/users
     repos:
+    token:
+    apiVersion:
     disabled: false
 
 

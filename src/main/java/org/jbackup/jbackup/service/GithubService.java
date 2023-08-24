@@ -19,4 +19,7 @@ public interface GithubService {
     @GetExchange("/{user}/starred")
     Mono<ResponseEntity<String>> getStarred(@PathVariable String user, @RequestParam Map<String,Object> parametres);
 
+    @GetExchange("/{user}/gists")
+    Mono<ResponseEntity<String>> getGist(@PathVariable String user, @RequestParam Map<String,Object> parametres);
+
 }

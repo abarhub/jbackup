@@ -36,7 +36,7 @@ public class RunProgram {
         executorService = Executors.newCachedThreadPool(factory);
     }
 
-    public int runCommand(Consumer<String> consumer, String... commandes) throws InterruptedException, IOException {
+    public int runCommand(Consumer<String> consumer, boolean stderrVersStdout, String... commandes) throws InterruptedException, IOException {
         ProcessBuilder builder = new ProcessBuilder();
         List<String> liste = new ArrayList<>();
         List<String> listeShow = new ArrayList<>();
@@ -57,7 +57,11 @@ public class RunProgram {
         executorService.submit(streamGobbler);
         StreamGobbler streamGobblerErrur =
                 new StreamGobbler(process.getErrorStream(), (x) -> {
-                    LOGGER.error("stderr: {}", x);
+                    if(stderrVersStdout){
+                        LOGGER.info("stderr: {}", x);
+                    } else {
+                        LOGGER.error("stderr: {}", x);
+                    }
                 });
         executorService.submit(streamGobblerErrur);
         LOGGER.info("run ...");
@@ -66,10 +70,14 @@ public class RunProgram {
         return res;
     }
 
-    public int runCommand(String... commandes) throws InterruptedException, IOException {
+    public int runCommand( boolean stderrVersStdout,String... commandes) throws InterruptedException, IOException {
         Consumer<String> consumer = (x) -> {
             LOGGER.info("stdout: {}", x);
         };
-        return runCommand(consumer,commandes);
+        return runCommand(consumer,stderrVersStdout,commandes);
+    }
+
+    public int runCommand(String... commandes) throws InterruptedException, IOException {
+        return runCommand(false,commandes);
     }
 }

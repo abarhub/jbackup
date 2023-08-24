@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.domain.Project;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.properties.GithubProperties;
@@ -22,11 +23,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class BackupGithubService {
@@ -34,26 +33,39 @@ public class BackupGithubService {
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupGithubService.class);
 
     public void backup(GithubProperties github) {
-//        RestClient restClient = RestClient.create();
+        var debut = Instant.now();
         final int size = 16 * 1024 * 1024;
         final ExchangeStrategies strategies = ExchangeStrategies.builder()
                 .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(size))
                 .build();
-        WebClient client = WebClient.builder()
+        var exchanged = WebClient.builder()
                 .baseUrl(github.getGithubUrl())
-                .exchangeStrategies(strategies)
-                .build();
-        HttpServiceProxyFactory factory = HttpServiceProxyFactory.builder(WebClientAdapter.forClient(client)).build();
+                .exchangeStrategies(strategies);
+        if (StringUtils.isNotBlank(github.getToken())) {
+            LOGGER.atInfo().log("api github with token");
+            exchanged = exchanged.defaultHeader("Authorization", "Bearer " + github.getToken());
+        }
+        if (StringUtils.isNotBlank(github.getApiVersion())) {
+            LOGGER.atInfo().log("api github version: {}", github.getApiVersion());
+            exchanged = exchanged.defaultHeader("X-GitHub-Api-Version", github.getApiVersion());
+        }
+        WebClient client = exchanged.build();
+        HttpServiceProxyFactory factory = HttpServiceProxyFactory
+                .builder(WebClientAdapter.forClient(client)).build();
 
         var githubService = factory.createClient(GithubService.class);
 
         final Instant instant = Instant.now();
         LOGGER.atInfo().log("date: {} ({}s)", instant, instant.getEpochSecond());
 
-        //enregistreUser(githubService, github, instant);
-        //enregistreEtoiles(githubService, github, instant);
+        enregistreUser(githubService, github, instant);
+        enregistreEtoiles(githubService, github, instant);
 
         enregistreProjets(github, githubService);
+
+        enregistreGist(githubService, github, instant);
+
+        LOGGER.atInfo().log("duree du backup: {}", Duration.between(debut, Instant.now()));
     }
 
     private static void enregistreProjets(GithubProperties github, GithubService githubService) {
@@ -118,8 +130,8 @@ public class BackupGithubService {
         } while (!fin);
 
         LOGGER.atInfo().log("Nombre de projet: {}", listeProjet.size());
-        LOGGER.atInfo().log("liste des projet: {}", listeProjet.stream().map(x->x.getNom()).sorted().toList());
-        LOGGER.atInfo().log("liste des projet2: {}", listeProjet.stream().map(x->x.getNom()).sorted().collect(Collectors.toSet()));
+        LOGGER.atInfo().log("liste des projet: {}", listeProjet.stream().map(x -> x.getNom()).sorted().toList());
+        LOGGER.atInfo().log("liste des projet2: {}", listeProjet.stream().map(x -> x.getNom()).sorted().collect(Collectors.toSet()));
 
         for (var projet : listeProjet) {
             var aTraiter = false;
@@ -132,32 +144,43 @@ public class BackupGithubService {
             }
             if (aTraiter) {
                 LOGGER.info("traitement de {}", projet.getNom());
-                Path rep = Path.of(github.getDest(), projet.getNom());
-                if (Files.exists(rep)) {
+                Path rep = Path.of(github.getDest(), "repos", projet.getNom());
+                if (Files.notExists(rep.getParent())) {
                     try {
-                        LOGGER.atInfo().log("pull {}",projet.getNom());
-                        RunProgram runProgram = new RunProgram();
-                        String[] tab = new String[]{"git", "-C", rep.toString(), "pull", "--all"};
-                        var res = runProgram.runCommand(tab);
-                        LOGGER.info("res={}", res);
-                    } catch (IOException | InterruptedException e) {
-                        throw new JBackupException("Erreur pour executer le clone vers " + rep, e);
-                    }
-                } else {
-                    try {
-                        LOGGER.atInfo().log("clone {} ({})",projet.getNom(), projet.getCloneUrl());
-                        RunProgram runProgram = new RunProgram();
-                        String[] tab = new String[]{"git", "clone", projet.getCloneUrl(), rep.toString()};
-                        var res = runProgram.runCommand(tab);
-                        LOGGER.info("res={}", res);
-                    } catch (IOException | InterruptedException e) {
-                        throw new JBackupException("Erreur pour executer le clone vers " + rep, e);
+                        Files.createDirectories(rep.getParent());
+                    } catch (IOException e) {
+                        throw new JBackupException("Erreur pour créer le répertoire " + rep.getParent(), e);
                     }
                 }
+                updateGit(rep, projet.getNom(), projet.getCloneUrl());
 
             }
         }
         LOGGER.atInfo().log("Enregistrement des projets OK");
+    }
+
+    private static void updateGit(Path rep, String nom, String cloneUrl) {
+        if (Files.exists(rep)) {
+            try {
+                LOGGER.atInfo().log("pull {}", nom);
+                RunProgram runProgram = new RunProgram();
+                String[] tab = new String[]{"git", "-C", rep.toString(), "pull", "--all"};
+                var res = runProgram.runCommand(tab);
+                LOGGER.info("res={}", res);
+            } catch (IOException | InterruptedException e) {
+                throw new JBackupException("Erreur pour executer le pull vers " + rep, e);
+            }
+        } else {
+            try {
+                LOGGER.atInfo().log("clone {} ({})", nom, cloneUrl);
+                RunProgram runProgram = new RunProgram();
+                String[] tab = new String[]{"git", "clone",cloneUrl, rep.toString()};
+                var res = runProgram.runCommand(true, tab);
+                LOGGER.info("res={}", res);
+            } catch (IOException | InterruptedException e) {
+                throw new JBackupException("Erreur pour executer le clone vers " + rep, e);
+            }
+        }
     }
 
     private void enregistreUser(GithubService githubService, GithubProperties github, Instant instant) {
@@ -208,7 +231,7 @@ public class BackupGithubService {
                 if (response.getStatusCode().is2xxSuccessful()) {
                     if (response.hasBody()) {
                         String body = response.getBody();
-                        LOGGER.atInfo().log("response:  {}", body);
+                        LOGGER.atDebug().log("response:  {}", body);
 
                         var rep = Paths.get(github.getDest(), "starred");
                         try {
@@ -244,5 +267,97 @@ public class BackupGithubService {
             no++;
         } while (!fin);
         LOGGER.atInfo().log("Enregistrement des étoiles ok");
+    }
+
+    private void enregistreGist(GithubService githubService, GithubProperties github, Instant instant) {
+        var fin = false;
+        var no = 0;
+        LOGGER.atInfo().log("Enregistrement gist ...");
+        do {
+            Map<String, Object> map = new HashMap<>();
+            map.put("per_page", 100);
+            map.put("page", no);
+            LOGGER.atInfo().log("call github starred (page: {}) ...", no);
+            var responseEntityMono = githubService.getGist(github.getUser(), map);
+            var responseOpt = responseEntityMono
+                    //.log()
+                    .doOnError(x -> LOGGER.atError().log("error:  {}", x.getMessage()))
+                    .blockOptional();
+            if (responseOpt.isPresent()) {
+                var response = responseOpt.get();
+                LOGGER.atInfo().log("response:  {}", response.getStatusCode());
+                boolean aucuneDonnees = true;
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    if (response.hasBody()) {
+                        String body = response.getBody();
+                        LOGGER.atDebug().log("response:  {}", body);
+
+                        var rep = Paths.get(github.getDest(), "gist");
+                        try {
+                            var rep3=rep.resolve("gist_meta");
+                            Files.createDirectories(rep3);
+                            var path2 = rep3.resolve("gist_meta_" + instant.getEpochSecond() + "_" + no + ".json");
+                            ObjectMapper mapper = new ObjectMapper()
+                                    .enable(SerializationFeature.INDENT_OUTPUT);
+                            JsonNode jsonNode = mapper.readTree(body);
+
+                            if (jsonNode != null && jsonNode.isArray()) {
+                                if (!jsonNode.isEmpty()) {
+                                    aucuneDonnees = false;
+
+                                    LOGGER.atInfo().log("Ecriture gist dans le fichier: {}", path2);
+                                    try (var f = Files.newBufferedWriter(path2, StandardCharsets.UTF_8)) {
+                                        mapper.writeValue(f, jsonNode);
+                                    }
+
+                                    for (int i = 0; i < jsonNode.size(); i++) {
+                                        var node = jsonNode.get(i);
+                                        var id = node.get("id").asText();
+                                        var urlPull = node.get("git_pull_url").asText();
+                                        var description = node.get("description").asText();
+                                        if (StringUtils.isNotBlank(id)) {
+                                            if (StringUtils.isNotBlank(urlPull)) {
+                                                var rep2 = rep.resolve(id).resolve("repo").resolve(id+".git");
+                                                if (Files.notExists(rep2.getParent())) {
+                                                    Files.createDirectories(rep2.getParent());
+                                                }
+                                                LOGGER.atInfo().log("mise à jour de {}", rep2);
+                                                updateGit(rep2, id, urlPull);
+                                            }
+                                            if (StringUtils.isNotBlank(description)) {
+                                                var rep2 = rep.resolve(id).resolve("description.txt");
+                                                var copie = true;
+                                                if (Files.exists(rep2)) {
+                                                    var s = Files.readString(rep2, StandardCharsets.UTF_8);
+                                                    if (s != null && Objects.equals(description, s)) {
+                                                        copie = false;
+                                                    }
+                                                }
+                                                if (copie) {
+                                                    LOGGER.atInfo().log("création du fichier {}", rep2);
+                                                    Files.writeString(rep2, description, StandardCharsets.UTF_8);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                }
+                            }
+                        } catch (IOException e) {
+                            throw new JBackupException("Erreur pour enregistre le gist", e);
+                        }
+                    }
+                    if (aucuneDonnees) {
+                        fin = true;
+                    }
+                } else {
+                    fin = true;
+                }
+            } else {
+                fin = true;
+            }
+            no++;
+        } while (!fin);
+        LOGGER.atInfo().log("Enregistrement gist ok");
     }
 }

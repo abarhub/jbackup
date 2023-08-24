@@ -8,6 +8,8 @@ public class GithubProperties {
     private String dest;
     private String githubUrl;
     private List<String> repos;
+    private String token;
+    private String apiVersion;
 
     private boolean disabled;
 
@@ -41,6 +43,22 @@ public class GithubProperties {
 
     public void setRepos(List<String> repos) {
         this.repos = repos;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    public String getApiVersion() {
+        return apiVersion;
+    }
+
+    public void setApiVersion(String apiVersion) {
+        this.apiVersion = apiVersion;
     }
 
     public boolean isDisabled() {
