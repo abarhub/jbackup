@@ -1,5 +1,6 @@
-package org.jbackup.jbackup.config;
+package org.jbackup.jbackup.properties;
 
+import org.jbackup.jbackup.config.CompressType;
 import org.springframework.util.unit.DataSize;
 
 public class GlobalProperties {

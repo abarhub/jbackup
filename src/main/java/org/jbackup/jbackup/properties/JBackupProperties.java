@@ -1,5 +1,6 @@
-package org.jbackup.jbackup.config;
+package org.jbackup.jbackup.properties;
 
+import org.jbackup.jbackup.config.SaveProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,8 @@ public class JBackupProperties {
 
     private GlobalProperties global;
     private Map<String, SaveProperties> dir;
+
+    private GithubProperties github;
 
     public GlobalProperties getGlobal() {
         return global;
@@ -26,5 +29,13 @@ public class JBackupProperties {
 
     public void setDir(Map<String, SaveProperties> dir) {
         this.dir = dir;
+    }
+
+    public GithubProperties getGithub() {
+        return github;
+    }
+
+    public void setGithub(GithubProperties github) {
+        this.github = github;
     }
 }

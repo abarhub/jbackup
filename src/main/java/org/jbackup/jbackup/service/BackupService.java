@@ -8,10 +8,11 @@ import net.lingala.zip4j.model.enums.CompressionMethod;
 import net.lingala.zip4j.model.enums.EncryptionMethod;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.compress.*;
 import org.jbackup.jbackup.config.CompressType;
-import org.jbackup.jbackup.config.GlobalProperties;
-import org.jbackup.jbackup.config.JBackupProperties;
+import org.jbackup.jbackup.properties.GlobalProperties;
+import org.jbackup.jbackup.properties.JBackupProperties;
 import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
@@ -22,7 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
+//import org.springframework.util.StringUtils;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -38,27 +39,31 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 
-@Service
 public class BackupService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupService.class);
 
     private final JBackupProperties jBackupProperties;
 
-    public BackupService(JBackupProperties jBackupProperties) {
+    private final BackupGithubService backupGithubService;
+
+    public BackupService(JBackupProperties jBackupProperties,
+                         BackupGithubService backupGithubService) {
         this.jBackupProperties = jBackupProperties;
+        this.backupGithubService=backupGithubService;
     }
 
     public void backup() {
         try {
             LOGGER.info("backup ...");
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
-                try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
-                    for (var entry : jBackupProperties.getDir().entrySet()) {
-                        var save = entry.getValue();
-                        if (save.isDisabled()) {
-                            LOGGER.info("backup {} disabled", entry.getKey());
-                        } else {
+
+                for (var entry : jBackupProperties.getDir().entrySet()) {
+                    var save = entry.getValue();
+                    if (save.isDisabled()) {
+                        LOGGER.info("backup {} disabled", entry.getKey());
+                    } else {
+                        try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
                             Instant debut = Instant.now();
                             LOGGER.info("backup {} ...", entry.getKey());
                             LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
@@ -95,9 +100,9 @@ public class BackupService {
                                     try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
                                         compress.start();
                                         if (compress instanceof CompressWalk compressWalk) {
-                                            LOGGER.atInfo().log("compress {} ...",p);
+                                            LOGGER.atInfo().log("compress {} ...", p);
                                             save3(compressWalk, p, "", save);
-                                            LOGGER.atInfo().log("compress {} OK",p);
+                                            LOGGER.atInfo().log("compress {} OK", p);
                                         } else {
                                             var compressTask = (CompressTask) compress;
                                             compressTask.task(p);
@@ -110,6 +115,10 @@ public class BackupService {
                         }
                     }
                 }
+            }
+            if(jBackupProperties.getGithub()!=null&& StringUtils.isNotBlank(jBackupProperties.getGithub().getUser())
+                &&!jBackupProperties.getGithub().isDisabled()){
+                backupGithubService.backup(jBackupProperties.getGithub());
             }
             LOGGER.info("backup OK");
         } catch (Exception e) {
@@ -217,13 +226,13 @@ public class BackupService {
         LOGGER.atInfo().log("Check files OK");
     }
 
-    private void checkZip(Path zip){
+    private void checkZip(Path zip) {
         try {
             SevenZipUtils sevenZipUtils = new SevenZipUtils(jBackupProperties.getGlobal().getPath7zip(), null);
             try {
                 sevenZipUtils.init();
                 sevenZipUtils.verifieFichier(zip, true, jBackupProperties.getGlobal().getPassword());
-            }finally {
+            } finally {
                 sevenZipUtils.terminate();
             }
         } catch (IOException | InterruptedException e) {
@@ -354,7 +363,7 @@ public class BackupService {
     private boolean isShadowCopy() {
         boolean isWindows = System.getProperty("os.name")
                 .toLowerCase().startsWith("windows");
-        return jBackupProperties.getGlobal().isShadowCopy()&&isWindows;
+        return jBackupProperties.getGlobal().isShadowCopy() && isWindows;
     }
 
     private void save2(ZipFile zipOut, Path p, String directory, SaveProperties save) {
@@ -365,7 +374,7 @@ public class BackupService {
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = "";
-                        if (StringUtils.hasText(directory)) {
+                        if (StringUtils.isNotBlank(directory)) {
                             dir = directory + "/" + x.getFileName();
                         } else {
                             dir = x.getFileName().toString();
@@ -377,7 +386,7 @@ public class BackupService {
                             try (var input = Files.newInputStream(x)) {
                                 ZipParameters zipParameters = new ZipParameters();
                                 var dir = "";
-                                if (StringUtils.hasText(directory)) {
+                                if (StringUtils.isNotBlank(directory)) {
                                     dir = directory + "/" + x.getFileName();
                                 } else {
                                     dir = x.getFileName().toString();
@@ -415,7 +424,7 @@ public class BackupService {
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = "";
-                        if (StringUtils.hasText(directory)) {
+                        if (StringUtils.isNotBlank(directory)) {
                             dir = directory + "/" + x.getFileName();
                         } else {
                             dir = x.getFileName().toString();
@@ -439,7 +448,7 @@ public class BackupService {
         try {
             try (var fis = Files.newInputStream(x)) {
                 var dir = "";
-                if (StringUtils.hasText(directory)) {
+                if (StringUtils.isNotBlank(directory)) {
                     dir = directory + "/" + x.getFileName();
                 } else {
                     dir = x.getFileName().toString();

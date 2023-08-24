@@ -22,5 +22,12 @@ jbackup:
       #include: '*.txt'
       exclude:
       #exclude: '**/*.html'
-      disabled: false
+      disabled: true
+  github:
+    user:
+    dest:
+    githubUrl: https://api.github.com/users
+    repos:
+    disabled: false
+
 

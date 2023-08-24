@@ -1,7 +1,7 @@
 package org.jbackup.jbackup.compress;
 
 import org.apache.commons.lang3.StringUtils;
-import org.jbackup.jbackup.config.GlobalProperties;
+import org.jbackup.jbackup.properties.GlobalProperties;
 import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.utils.SevenZipUtils;
