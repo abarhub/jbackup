@@ -42,6 +42,8 @@ public class BackupGithubService {
     private int nbGetRelease;
     private int nbGitRepo;
     private int nbGitGist;
+    private int nbGitWiki;
+    private int nbGitWikiKO;
 
     public void backup(GithubProperties github) {
         var debut = Instant.now();
@@ -58,10 +60,10 @@ public class BackupGithubService {
         enregistreGist(githubService, github, instant);
 
         LOGGER.atInfo().log("nb appels: {} (user:{}, repos:{}, started:{}, " +
-                        "gist: {}, release: {}, git repos: {}, git gist: {})",
+                        "gist: {}, release: {}, git repos: {}, git gist: {}, git wiki: {}, git wiki ok: {})",
                 nbGetUser + nbGetRepos + nbGetStarred + nbGetGist + nbGetRelease,
                 nbGetUser, nbGetRepos, nbGetStarred, nbGetGist, nbGetRelease,
-                nbGitRepo, nbGitGist);
+                nbGitRepo, nbGitGist, nbGitWiki, nbGitWikiKO);
 
         LOGGER.atInfo().log("duree du backup: {}", Duration.between(debut, Instant.now()));
     }
@@ -126,6 +128,9 @@ public class BackupGithubService {
                 }
 
                 enregistreReleases(githubService, github, instant, projet);
+                if (projet.isHasWiki()) {
+                    enregistreWiki(githubService, github, instant, projet);
+                }
             }
         }
 
@@ -166,10 +171,12 @@ public class BackupGithubService {
                                 var nom = project.get("name").asText();
                                 var url = project.get("url").asText();
                                 var urlClone = project.get("clone_url").asText();
+                                var wiki = project.get("has_wiki").asBoolean(false);
                                 var projet = new Project();
                                 projet.setNom(nom);
                                 projet.setUrl(url);
                                 projet.setCloneUrl(urlClone);
+                                projet.setHasWiki(wiki);
                                 listeProjet.add(projet);
                                 LOGGER.atInfo().log("{}: {} ({})", nom, url, urlClone);
                             }
@@ -511,6 +518,34 @@ public class BackupGithubService {
             no++;
         } while (!fin);
         LOGGER.atInfo().log("Enregistrement release ok");
+    }
+
+    private void enregistreWiki(GithubService githubService, GithubProperties github, Instant instant, Project projet) {
+        LOGGER.atInfo().log("Enregistrement wiki ...");
+        var rep = Paths.get(github.getDest(), "wiki", projet.getNom());
+        var path = rep.resolve("wiki");
+        var url = projet.getCloneUrl();
+        if (url.endsWith(".git")) {
+            url = url.substring(0, url.length() - 4) + ".wiki.git";
+            LOGGER.atInfo().log("clonage du wiki {} ({},{}) ...", projet.getNom(), url, path);
+            var res = updateGit(path, projet.getNom(), url, false);
+            if (!res) {
+                nbGitWikiKO++;
+                LOGGER.atWarn().log("Le clonage a echouer pour le wiki du projet {}", projet.getNom());
+                try {
+                    LOGGER.atInfo().log("Suppression du répertoire {} si il est vide ...",path.getParent());
+                    Files.deleteIfExists(path);
+                    Files.deleteIfExists(path.getParent());
+                    LOGGER.atInfo().log("Suppression du répertoire {} ok",path);
+                } catch (IOException e) {
+                    LOGGER.atWarn().log("Erreur pour supprimer le répertoire {}", path, e);
+                }
+            } else {
+                nbGitWiki++;
+                LOGGER.atInfo().log("clonage du wiki {} ok", projet.getNom());
+            }
+        }
+        LOGGER.atInfo().log("Enregistrement wiki ok");
     }
 
 }

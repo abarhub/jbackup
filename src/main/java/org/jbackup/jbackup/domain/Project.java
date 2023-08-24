@@ -7,6 +7,7 @@ public class Project {
     private String nom;
     private String url;
     private String cloneUrl;
+    private boolean hasWiki;
 
     public String getNom() {
         return nom;
@@ -32,12 +33,21 @@ public class Project {
         this.cloneUrl = cloneUrl;
     }
 
+    public boolean isHasWiki() {
+        return hasWiki;
+    }
+
+    public void setHasWiki(boolean hasWiki) {
+        this.hasWiki = hasWiki;
+    }
+
     @Override
     public String toString() {
         return new StringJoiner(", ", Project.class.getSimpleName() + "[", "]")
                 .add("nom='" + nom + "'")
                 .add("url='" + url + "'")
                 .add("cloneUrl='" + cloneUrl + "'")
+                .add("hasWiki=" + hasWiki)
                 .toString();
     }
 }
