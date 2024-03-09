@@ -36,17 +36,19 @@ public class RunProgram {
         executorService = Executors.newCachedThreadPool(factory);
     }
 
-    public int runCommand(Consumer<String> consumer, boolean stderrVersStdout, String... commandes) throws InterruptedException, IOException {
+    public int runCommand(Consumer<String> consumer, boolean stderrVersStdout, List<String> commandes, List<String> commandesShow) throws InterruptedException, IOException {
         ProcessBuilder builder = new ProcessBuilder();
         List<String> liste = new ArrayList<>();
         List<String> listeShow = new ArrayList<>();
+        int pos=0;
         for (String s : commandes) {
             var s2 = s;
             if (s.contains(" ")) {
                 s2 = "\"" + s + "\"";
             }
             liste.add(s2);
-            listeShow.add(s2);
+            listeShow.add(commandesShow.get(pos));
+            pos++;
         }
         LOGGER.info("run {}", listeShow);
         LOGGER.trace("run {}", liste);
@@ -70,14 +72,14 @@ public class RunProgram {
         return res;
     }
 
-    public int runCommand( boolean stderrVersStdout,String... commandes) throws InterruptedException, IOException {
+    public int runCommand( boolean stderrVersStdout,List<String> commandes, List<String> commandesShow) throws InterruptedException, IOException {
         Consumer<String> consumer = (x) -> {
             LOGGER.info("stdout: {}", x);
         };
-        return runCommand(consumer,stderrVersStdout,commandes);
+        return runCommand(consumer,stderrVersStdout,commandes, commandesShow);
     }
 
-    public int runCommand(String... commandes) throws InterruptedException, IOException {
-        return runCommand(false,commandes);
+    public int runCommand(List<String> commandes) throws InterruptedException, IOException {
+        return runCommand(false,commandes, commandes);
     }
 }

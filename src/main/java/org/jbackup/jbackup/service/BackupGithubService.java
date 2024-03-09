@@ -45,8 +45,11 @@ public class BackupGithubService {
     private int nbGitWiki;
     private int nbGitWikiKO;
 
+    private GithubProperties github;
+
     public void backup(GithubProperties github) {
         var debut = Instant.now();
+        this.github = github;
         final var githubService = getGithubService(github);
 
         final Instant instant = Instant.now();
@@ -215,23 +218,32 @@ public class BackupGithubService {
     }
 
     private boolean updateGit(Path rep, String nom, String cloneUrl, boolean mirror) {
-        String[] tab;
+        List<String> tab, tab2;
+        final var debut="https://";
+        var cloneUrlShow=cloneUrl;
+        if (cloneUrl.startsWith(debut)) {
+            cloneUrl = cloneUrl.substring(0, debut.length()) + github.getUser() + ":" + github.getToken() + "@" + cloneUrl.substring(debut.length());
+            cloneUrlShow=cloneUrl.substring(0, debut.length()) + github.getUser() + ":XXX@" + cloneUrl.substring(debut.length());
+        }
         if (mirror) {
 
             LOGGER.atInfo().log("clone mirror {} ({})", nom, cloneUrl);
-            tab = new String[]{"git", "clone", "--mirror", cloneUrl, rep.toString()};
+            tab = List.of("git", "clone", "--mirror", cloneUrl, rep.toString());
+            tab2= List.of("git", "clone", "--mirror", cloneUrlShow, rep.toString());
         } else {
             if (Files.exists(rep)) {
                 LOGGER.atInfo().log("pull {}", nom);
-                tab = new String[]{"git", "-C", rep.toString(), "pull", "--all"};
+                tab = List.of("git", "-C", rep.toString(), "pull", "--all");
+                tab2=tab;
             } else {
                 LOGGER.atInfo().log("clone {} ({})", nom, cloneUrl);
-                tab = new String[]{"git", "clone", cloneUrl, rep.toString()};
+                tab = List.of("git", "clone", cloneUrl, rep.toString());
+                tab2 = List.of("git", "clone", cloneUrlShow, rep.toString());
             }
         }
         try {
             RunProgram runProgram = new RunProgram();
-            var res = runProgram.runCommand(true, tab);
+            var res = runProgram.runCommand(true, tab, tab2);
             if (res != 0) {
                 LOGGER.error("Erreur res={}", res);
                 return false;
@@ -240,7 +252,7 @@ public class BackupGithubService {
                 return true;
             }
         } catch (IOException | InterruptedException e) {
-            throw new JBackupException("Erreur pour executer la commande git " + Arrays.toString(tab) + " vers " + rep, e);
+            throw new JBackupException("Erreur pour executer la commande git " + tab + " vers " + rep, e);
         }
     }
 
@@ -533,10 +545,10 @@ public class BackupGithubService {
                 nbGitWikiKO++;
                 LOGGER.atWarn().log("Le clonage a echouer pour le wiki du projet {}", projet.getNom());
                 try {
-                    LOGGER.atInfo().log("Suppression du répertoire {} si il est vide ...",path.getParent());
+                    LOGGER.atInfo().log("Suppression du répertoire {} si il est vide ...", path.getParent());
                     Files.deleteIfExists(path);
                     Files.deleteIfExists(path.getParent());
-                    LOGGER.atInfo().log("Suppression du répertoire {} ok",path);
+                    LOGGER.atInfo().log("Suppression du répertoire {} ok", path);
                 } catch (IOException e) {
                     LOGGER.atWarn().log("Erreur pour supprimer le répertoire {}", path, e);
                 }
