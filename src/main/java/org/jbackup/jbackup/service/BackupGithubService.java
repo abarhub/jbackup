@@ -227,7 +227,7 @@ public class BackupGithubService {
         }
         if (mirror) {
 
-            LOGGER.atInfo().log("clone mirror {} ({})", nom, cloneUrl);
+            LOGGER.atInfo().log("clone mirror {} ({})", nom, cloneUrlShow);
             tab = List.of("git", "clone", "--mirror", cloneUrl, rep.toString());
             tab2= List.of("git", "clone", "--mirror", cloneUrlShow, rep.toString());
         } else {
@@ -236,7 +236,7 @@ public class BackupGithubService {
                 tab = List.of("git", "-C", rep.toString(), "pull", "--all");
                 tab2=tab;
             } else {
-                LOGGER.atInfo().log("clone {} ({})", nom, cloneUrl);
+                LOGGER.atInfo().log("clone {} ({})", nom, cloneUrlShow);
                 tab = List.of("git", "clone", cloneUrl, rep.toString());
                 tab2 = List.of("git", "clone", cloneUrlShow, rep.toString());
             }
