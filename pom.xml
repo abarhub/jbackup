@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.0</version>
+		<version>3.3.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>org.jbackup</groupId>
@@ -42,7 +42,7 @@
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
-			<version>33.0.0-jre</version>
+			<version>33.2.1-jre</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-io</groupId>
@@ -53,13 +53,13 @@
 		<dependency>
 			<groupId>commons-codec</groupId>
 			<artifactId>commons-codec</artifactId>
-			<version>1.15</version>
+			<version>1.17.1</version>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
-			<version>3.12.0</version>
+			<version>3.15.0</version>
 		</dependency>
 
 		<dependency>
