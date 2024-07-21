@@ -11,19 +11,17 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.compress.*;
 import org.jbackup.jbackup.config.CompressType;
-import org.jbackup.jbackup.properties.GlobalProperties;
-import org.jbackup.jbackup.properties.JBackupProperties;
 import org.jbackup.jbackup.config.SaveProperties;
 import org.jbackup.jbackup.exception.JBackupException;
+import org.jbackup.jbackup.properties.GlobalProperties;
+import org.jbackup.jbackup.properties.JBackupProperties;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
 import org.jbackup.jbackup.utils.AESCrypt;
 import org.jbackup.jbackup.utils.PathUtils;
 import org.jbackup.jbackup.utils.SevenZipUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-//import org.springframework.util.StringUtils;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -50,7 +48,7 @@ public class BackupService {
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService) {
         this.jBackupProperties = jBackupProperties;
-        this.backupGithubService=backupGithubService;
+        this.backupGithubService = backupGithubService;
     }
 
     public void backup() {
@@ -65,59 +63,73 @@ public class BackupService {
                     } else {
                         try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
                             Instant debut = Instant.now();
+                            String filename0=null;
                             LOGGER.info("backup {} ...", entry.getKey());
                             LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
-                            for (var path : save.getPath()) {
-                                Path p = Path.of(path);
-                                if (isShadowCopy()) {
-                                    p = shadowCopyUtils.getPath(p.toAbsolutePath());
-                                }
+//                            for (var path : save.getPath()) {
+//                                Path p = Path.of(path);
+//                                if (isShadowCopy()) {
+//                                    p = shadowCopyUtils.getPath(p.toAbsolutePath());
+//                                }
 
-                                if (false) {
-                                    var pathZip = save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
-                                    char[] password = null;
-                                    if (jBackupProperties.getGlobal().isCrypt()) {
-                                        password = jBackupProperties.getGlobal().getPassword().toCharArray();
-                                    }
-                                    try (ZipFile zipFile = new ZipFile(pathZip, password)) {
-
-                                        save2(zipFile, p, "", save);
-
-                                    }
-
-                                } else if (false) {
-                                    try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
-                                        ZipOutputStream zipOut = new ZipOutputStream(fos);
-
-                                        save(zipOut, p, "", save);
-
-                                        zipOut.close();
-                                    }
-                                } else {
+//                                if (false) {
+//                                    var pathZip = save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip";
+//                                    char[] password = null;
+//                                    if (jBackupProperties.getGlobal().isCrypt()) {
+//                                        password = jBackupProperties.getGlobal().getPassword().toCharArray();
+//                                    }
+//                                    try (ZipFile zipFile = new ZipFile(pathZip, password)) {
+//
+//                                        save2(zipFile, p, "", save);
+//
+//                                    }
+//
+//                                } else if (false) {
+//                                    try (FileOutputStream fos = new FileOutputStream(save.getDest() + "/" + entry.getKey() + "_" + Instant.now().getEpochSecond() + ".zip")) {
+//                                        ZipOutputStream zipOut = new ZipOutputStream(fos);
+//
+//                                        save(zipOut, p, "", save);
+//
+//                                        zipOut.close();
+//                                    }
+//                                } else {
                                     String filename;
-                                    String extension = getExtension(jBackupProperties.getGlobal());
-                                    filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + extension);
+                                    if(filename0==null) {
+                                        String extension = getExtension(jBackupProperties.getGlobal());
+                                        filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + extension);
+                                        filename0=filename;
+                                    } else {
+                                        filename=filename0;
+                                    }
                                     try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
                                         compress.start();
-                                        if (compress instanceof CompressWalk compressWalk) {
-                                            LOGGER.atInfo().log("compress {} ...", p);
-                                            save3(compressWalk, p, "", save);
-                                            LOGGER.atInfo().log("compress {} OK", p);
-                                        } else {
-                                            var compressTask = (CompressTask) compress;
-                                            compressTask.task(p);
+
+                                        for (var path : save.getPath()) {
+                                            Path p = Path.of(path);
+                                            if (isShadowCopy()) {
+                                                p = shadowCopyUtils.getPath(p.toAbsolutePath());
+                                            }
+
+                                            if (compress instanceof CompressWalk compressWalk) {
+                                                LOGGER.atInfo().log("compress {} ...", p);
+                                                save3(compressWalk, p, p.getFileName().toString(), save);
+                                                LOGGER.atInfo().log("compress {} OK", p);
+                                            } else {
+                                                var compressTask = (CompressTask) compress;
+                                                compressTask.task(p);
+                                            }
                                         }
                                     }
                                     terminate(filename);
-                                }
-                            }
+//                                }
+                            //}
                             LOGGER.info("backup {} ok ({})", entry.getKey(), Duration.between(debut, Instant.now()));
                         }
                     }
                 }
             }
-            if(jBackupProperties.getGithub()!=null&& StringUtils.isNotBlank(jBackupProperties.getGithub().getUser())
-                &&!jBackupProperties.getGithub().isDisabled()){
+            if (jBackupProperties.getGithub() != null && StringUtils.isNotBlank(jBackupProperties.getGithub().getUser())
+                    && !jBackupProperties.getGithub().isDisabled()) {
                 backupGithubService.backup(jBackupProperties.getGithub());
             }
             LOGGER.info("backup OK");
