@@ -339,7 +339,7 @@ public class BackupService {
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
-                    LOGGER.debug("ignore {}", x);
+                    LOGGER.info("ignore {}", x);
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
@@ -350,7 +350,7 @@ public class BackupService {
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
                         } else {
-                            LOGGER.debug("not include {}", x);
+                            LOGGER.info("not include {}", x);
                         }
                     }
                 }

@@ -22,7 +22,7 @@ jbackup:
       #include: '*.txt'
       exclude:
       #exclude: '**/*.html'
-      disabled: true
+      disabled: false
   github:
     user:
     dest:
@@ -33,7 +33,7 @@ jbackup:
     mirror: false
     pageSize: 100
     maxMemory: 10MB
-    disabled: false
+    disabled: true
     connexionTimeout: 2m
     readTimeout: 2m
 

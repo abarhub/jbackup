@@ -1,9 +1,9 @@
 package org.jbackup.jbackup.compress;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.compress.archivers.zip.Zip64Mode;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
-import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.shadowcopy.StreamGobbler;
@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -129,7 +130,7 @@ public class CompressZipApache implements CompressWalk {
                     f = link.toFile();
                     LOGGER.atInfo().log("create symlink ok");
                 }
-            } else if(false) {
+            } else if(true) {
                 if (s.length() > 250) {
                     var list = Arrays.stream(File.listRoots())
                             .map(x -> x.getName())
@@ -179,9 +180,17 @@ public class CompressZipApache implements CompressWalk {
                 }
             }
 
+            var f2=f;
+            if(f.getName().contains("+++5gyzk7t89hc-496ff2e9c6d22116")){
+                //f2=new File("\""+f+"\"");
+                LOGGER.info("f2={}",f2);
+            }
 //            try (var input = new FileInputStream(p.toFile())) {
-            try (var input = new FileInputStream(f)) {
+            try (var input = new FileInputStream(f2)) {
                 IOUtils.copy(input, archive);
+            } catch (FileNotFoundException e) {
+                LOGGER.atError().log("Erreur pour lire le fichier {}",f, e);
+                throw e;
             }
             if (link != null) {
                 LOGGER.atInfo().log("delete symlink {}", link);
