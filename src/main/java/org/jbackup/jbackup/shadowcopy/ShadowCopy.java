@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,8 @@ public class ShadowCopy implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ShadowCopy.class);
 
     private final Map<Character, ShadowPath> map = new ConcurrentHashMap<>();
+
+    private final Map<Path, Path> mapLink = new ConcurrentHashMap<>();
 
     public Path getPath(Path path) {
         Assert.isTrue(path.isAbsolute(), "Path '" + path + "' must be absolute");
@@ -54,7 +57,30 @@ public class ShadowCopy implements AutoCloseable {
 //        if(s3.startsWith("\\\\?\\")){
 //            s3="\\\\.\\"+s3.substring(4);
 //        }
-        return Path.of(s3);
+        Path p3;
+        if (!mapLink.containsKey(path)) {
+            var linkDebut = p.volume() + ":/link";
+            var link = linkDebut;
+            var i = 1;
+            while (Files.exists(Path.of(link))) {
+                i++;
+                link = linkDebut + i;
+            }
+            var linkp = Path.of(link);
+            var cible = Path.of(s3).getParent();
+            LOGGER.info("création du lien '{}' -> '{}'", linkp, cible);
+            try {
+                Files.createSymbolicLink(linkp, cible);
+            } catch (IOException e) {
+                throw new JBackupException("Erreur pour creer le lien '" + linkp + "' -> '" + cible + "' : " + e.getMessage(), e);
+            }
+            p3 = linkp.resolve(Path.of(s3).getFileName());
+            mapLink.put(path, p3);
+        } else {
+            p3 = mapLink.get(path);
+        }
+//        return Path.of(s3);
+        return p3;
     }
 
     private ShadowPath initPath(char volume) {
@@ -77,6 +103,17 @@ public class ShadowCopy implements AutoCloseable {
     public void close() {
         for (var entry : map.entrySet()) {
             deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
+        }
+        for (var entry : mapLink.entrySet()) {
+            var path=entry.getValue().getParent();
+            try {
+                LOGGER.info("Suppression du link {} ...", path);
+                //var deletedIfExists = Files.deleteIfExists(entry.getValue());
+                Files.delete(path);
+                LOGGER.info("Suppression du link {} OK (deleted={})", path, true);
+            } catch (IOException e) {
+                LOGGER.error("Can't delete link for {}", path, e);
+            }
         }
     }
 
