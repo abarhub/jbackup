@@ -40,10 +40,15 @@ import java.util.zip.ZipOutputStream;
 public class BackupService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupService.class);
+    public static final String EXTENSION_CRP = ".crp";
+    public static final String EXTENSION_ZIP = ".zip";
+    public static final String EXTENSION_SHA_256 = ".sha256";
 
     private final JBackupProperties jBackupProperties;
 
     private final BackupGithubService backupGithubService;
+
+    private final Map<String,PathMatcher> mapGlob=new HashMap<>();
 
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService) {
@@ -166,7 +171,7 @@ public class BackupService {
             throw new JBackupException("Error for read hash", e);
         }
         for (var p : listFiles) {
-            if (p.endsWith(".crp")) {
+            if (p.endsWith(EXTENSION_CRP)) {
                 Path fileNotCrypted = Path.of(p.substring(0, p.length() - 4));
                 if (Files.notExists(fileNotCrypted)) {
                     throw new JBackupException("File '" + fileNotCrypted + "' not exist");
@@ -254,7 +259,7 @@ public class BackupService {
 
     private Path calculateHash(List<String> listFiles, String file) {
         var name = FilenameUtils.removeExtension(file);
-        var f = Path.of(name + ".sha256");
+        var f = Path.of(name + EXTENSION_SHA_256);
         List<String> liste = new ArrayList<>();
         try {
             DigestUtils digest = new DigestUtils("SHA-256");
@@ -280,7 +285,7 @@ public class BackupService {
         var p = Path.of(file);
         if (Files.exists(p)) {
             try {
-                var fileCrypt = p + ".crp";
+                var fileCrypt = p + EXTENSION_CRP;
                 listeFiles.add(fileCrypt);
                 AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
                 crypt.encrypt(2, p.toString(), fileCrypt);
@@ -289,21 +294,23 @@ public class BackupService {
             }
         }
         List<Path> liste;
-        try {
-            liste = Files.list(p.getParent())
-                    .filter(x -> {
-                        var x1 = x.getFileName().toString();
-                        var x2 = p.getFileName().toString();
-                        return x1.startsWith(x2 + ".z") || x1.startsWith(x2 + ".Z");
-                    })
-                    .toList();
+        try(var stream=Files.list(p.getParent())
+                .filter(x -> {
+                    var x1 = x.getFileName().toString();
+                    if(x1.endsWith(EXTENSION_CRP)||x1.endsWith(EXTENSION_ZIP)) {
+                        return false;
+                    }
+                    var x2 = FilenameUtils.removeExtension(p.getFileName().toString());
+                    return x1.startsWith(x2 + ".z") || x1.startsWith(x2 + ".Z");
+                })) {
+            liste = stream.toList();
         } catch (IOException e) {
             throw new JBackupException("Error for list files", e);
         }
         for (var p3 : liste) {
             try {
                 listeFiles.add(p3.toString());
-                var fileCrypt = p3 + ".crp";
+                var fileCrypt = p3 + EXTENSION_CRP;
                 listeFiles.add(fileCrypt);
                 AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
                 crypt.encrypt(2, p3.toString(), fileCrypt);
@@ -483,7 +490,7 @@ public class BackupService {
         if (!CollectionUtils.isEmpty(saveProperties.getExclude())) {
             for (var glob : saveProperties.getExclude()) {
                 try {
-                    PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
+                    PathMatcher pathMatcher = getGlob(glob);
                     if (pathMatcher.matches(path)) {
                         return true;
                     }
@@ -499,7 +506,7 @@ public class BackupService {
         if (!CollectionUtils.isEmpty(saveProperties.getInclude())) {
             for (var glob : saveProperties.getInclude()) {
                 try {
-                    PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
+                    PathMatcher pathMatcher = getGlob(glob);
                     if (pathMatcher.matches(path)) {
                         return true;
                     }
@@ -510,6 +517,16 @@ public class BackupService {
             return false;
         }
         return true;
+    }
+
+    private PathMatcher getGlob(String glob){
+        if(mapGlob.containsKey(glob)){
+            return mapGlob.get(glob);
+        } else {
+            PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
+            mapGlob.put(glob, pathMatcher);
+            return pathMatcher;
+        }
     }
 
 }
