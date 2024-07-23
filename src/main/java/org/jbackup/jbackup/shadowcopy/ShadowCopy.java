@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ShadowCopy implements AutoCloseable {
 
@@ -23,6 +24,8 @@ public class ShadowCopy implements AutoCloseable {
     private final Map<Character, ShadowPath> map = new ConcurrentHashMap<>();
 
     private final Map<Path, Path> mapLink = new ConcurrentHashMap<>();
+
+    private final AtomicInteger counter = new AtomicInteger(1);
 
     public Path getPath(Path path) {
         Assert.isTrue(path.isAbsolute(), "Path '" + path + "' must be absolute");
@@ -59,11 +62,14 @@ public class ShadowCopy implements AutoCloseable {
 //        }
         Path p3;
         if (!mapLink.containsKey(path)) {
-            var linkDebut = p.volume() + ":/link";
+            var linkDebut = p.volume() + ":/linkjb";
             var link = linkDebut;
-            var i = 1;
+            var i = counter.getAndIncrement();
+            if (i > 1) {
+                linkDebut += i;
+            }
             while (Files.exists(Path.of(link))) {
-                i++;
+                i = counter.getAndIncrement();
                 link = linkDebut + i;
             }
             var linkp = Path.of(link);
@@ -105,7 +111,7 @@ public class ShadowCopy implements AutoCloseable {
             deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
         }
         for (var entry : mapLink.entrySet()) {
-            var path=entry.getValue().getParent();
+            var path = entry.getValue().getParent();
             try {
                 LOGGER.info("Suppression du link {} ...", path);
                 //var deletedIfExists = Files.deleteIfExists(entry.getValue());
