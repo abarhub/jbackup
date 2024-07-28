@@ -84,8 +84,10 @@ public class CompressZipApache implements CompressWalk {
     @Override
     public void close() {
         try {
-            archive.finish();
-            archive.close();
+            if(archive!=null) {
+                archive.finish();
+                archive.close();
+            }
             terminate();
         } catch (IOException e) {
             throw new JBackupException("Error for close", e);
