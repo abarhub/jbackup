@@ -26,12 +26,13 @@ public class ShadowCopy implements AutoCloseable {
 
     private final Map<Path, Path> mapLink = new ConcurrentHashMap<>();
 
-    private final AtomicInteger counter = new AtomicInteger(1);
+    private final AtomicInteger counter;
 
     private final RunService runService;
 
-    public ShadowCopy(RunService runService) {
+    public ShadowCopy(RunService runService,AtomicInteger compteur) {
         this.runService = runService;
+        this.counter=compteur;
     }
 
     public Path getPath(Path path) {
@@ -122,8 +123,9 @@ public class ShadowCopy implements AutoCloseable {
             try {
                 LOGGER.info("Suppression du link {} ...", path);
                 //var deletedIfExists = Files.deleteIfExists(entry.getValue());
-                Files.delete(path);
-                LOGGER.info("Suppression du link {} OK (deleted={})", path, true);
+//                Files.delete(path);
+                var deletedIfExists = Files.deleteIfExists(entry.getValue());
+                LOGGER.info("Suppression du link {} OK (deleted={})", path, deletedIfExists);
             } catch (IOException e) {
                 LOGGER.error("Can't delete link for {}", path, e);
             }
@@ -201,27 +203,27 @@ public class ShadowCopy implements AutoCloseable {
         return liste.getList();
     }
 
-    private List<String> run2(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
-        LOGGER.atInfo().log("run of : {}", commands);
-        ProcessBuilder builder = new ProcessBuilder();
-        builder.command(commands);
-        builder.directory(new File(System.getProperty("user.home")));
-        TeeList liste = new TeeList(logInfo);
-        Process process = builder.start();
-        StreamGobbler streamGobbler =
-                new StreamGobbler(process.getInputStream(), liste::add);
-        StreamGobbler streamGobbler2 =
-                new StreamGobbler(process.getErrorStream(), LOGGER::error);
-        Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
-        Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
-        int exitCode = process.waitFor();
-        if (exitCode == 0) {
-            LOGGER.debug("Execution reussi");
-        } else {
-            throw new JBackupException("Erreur pour l'execution (code retour=" + exitCode + ")");
-        }
-        future.get(10, TimeUnit.SECONDS);
-        future2.get(10, TimeUnit.SECONDS);
-        return liste.getList();
-    }
+//    private List<String> run2(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+//        LOGGER.atInfo().log("run of : {}", commands);
+//        ProcessBuilder builder = new ProcessBuilder();
+//        builder.command(commands);
+//        builder.directory(new File(System.getProperty("user.home")));
+//        TeeList liste = new TeeList(logInfo);
+//        Process process = builder.start();
+//        StreamGobbler streamGobbler =
+//                new StreamGobbler(process.getInputStream(), liste::add);
+//        StreamGobbler streamGobbler2 =
+//                new StreamGobbler(process.getErrorStream(), LOGGER::error);
+//        Future<?> future = Executors.newSingleThreadExecutor().submit(streamGobbler);
+//        Future<?> future2 = Executors.newSingleThreadExecutor().submit(streamGobbler2);
+//        int exitCode = process.waitFor();
+//        if (exitCode == 0) {
+//            LOGGER.debug("Execution reussi");
+//        } else {
+//            throw new JBackupException("Erreur pour l'execution (code retour=" + exitCode + ")");
+//        }
+//        future.get(10, TimeUnit.SECONDS);
+//        future2.get(10, TimeUnit.SECONDS);
+//        return liste.getList();
+//    }
 }

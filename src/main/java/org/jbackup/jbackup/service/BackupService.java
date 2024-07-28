@@ -33,6 +33,7 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -52,6 +53,8 @@ public class BackupService {
 
     private final RunService runService;
 
+    private final AtomicInteger counter = new AtomicInteger(1);
+
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService,
                          RunService runService) {
@@ -65,12 +68,12 @@ public class BackupService {
             LOGGER.info("backup ...");
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
 
-                for (var entry : jBackupProperties.getDir().entrySet()) {
-                    var save = entry.getValue();
-                    if (save.isDisabled()) {
-                        LOGGER.info("backup {} disabled", entry.getKey());
-                    } else {
-                        try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService)) {
+                try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService, counter)) {
+                    for (var entry : jBackupProperties.getDir().entrySet()) {
+                        var save = entry.getValue();
+                        if (save.isDisabled()) {
+                            LOGGER.info("backup {} disabled", entry.getKey());
+                        } else {
                             Instant debut = Instant.now();
                             String filename0=null;
                             LOGGER.info("backup {} ...", entry.getKey());
