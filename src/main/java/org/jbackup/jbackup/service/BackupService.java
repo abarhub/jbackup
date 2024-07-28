@@ -50,10 +50,14 @@ public class BackupService {
 
     private final Map<String,PathMatcher> mapGlob=new HashMap<>();
 
+    private final RunService runService;
+
     public BackupService(JBackupProperties jBackupProperties,
-                         BackupGithubService backupGithubService) {
+                         BackupGithubService backupGithubService,
+                         RunService runService) {
         this.jBackupProperties = jBackupProperties;
         this.backupGithubService = backupGithubService;
+        this.runService=Objects.requireNonNull(runService,"runService is null");
     }
 
     public void backup() {
@@ -66,7 +70,7 @@ public class BackupService {
                     if (save.isDisabled()) {
                         LOGGER.info("backup {} disabled", entry.getKey());
                     } else {
-                        try (ShadowCopy shadowCopyUtils = new ShadowCopy()) {
+                        try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService)) {
                             Instant debut = Instant.now();
                             String filename0=null;
                             LOGGER.info("backup {} ...", entry.getKey());
@@ -347,7 +351,7 @@ public class BackupService {
             } else {
                 splitSize = Optional.empty();
             }
-            compress = new CompressZipApache(filename, splitSize);
+            compress = new CompressZipApache(filename, splitSize, runService);
         } else {
             throw new JBackupException("Invalid value for compress: " + global.getCompress());
         }
@@ -375,7 +379,7 @@ public class BackupService {
                 }
             });
         } catch (IOException e) {
-            throw new RuntimeException("Error for save", e);
+            throw new RuntimeException("Error for save for '"+p+"' (dir="+directory+")", e);
         }
     }
 

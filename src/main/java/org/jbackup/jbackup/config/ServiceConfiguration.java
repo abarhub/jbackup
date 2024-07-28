@@ -3,6 +3,7 @@ package org.jbackup.jbackup.config;
 import org.jbackup.jbackup.properties.JBackupProperties;
 import org.jbackup.jbackup.service.BackupGithubService;
 import org.jbackup.jbackup.service.BackupService;
+import org.jbackup.jbackup.service.RunService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,7 +17,13 @@ public class ServiceConfiguration {
 
     @Bean
     public BackupService backupService(JBackupProperties jBackupProperties,
-                                       BackupGithubService backupGithubService) {
-        return new BackupService(jBackupProperties, backupGithubService);
+                                       BackupGithubService backupGithubService,
+                                       RunService runService) {
+        return new BackupService(jBackupProperties, backupGithubService, runService);
+    }
+
+    @Bean
+    public RunService runService(){
+        return new RunService();
     }
 }

@@ -1,6 +1,7 @@
 package org.jbackup.jbackup.shadowcopy;
 
 import org.jbackup.jbackup.exception.JBackupException;
+import org.jbackup.jbackup.service.RunService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.Assert;
@@ -26,6 +27,12 @@ public class ShadowCopy implements AutoCloseable {
     private final Map<Path, Path> mapLink = new ConcurrentHashMap<>();
 
     private final AtomicInteger counter = new AtomicInteger(1);
+
+    private final RunService runService;
+
+    public ShadowCopy(RunService runService) {
+        this.runService = runService;
+    }
 
     public Path getPath(Path path) {
         Assert.isTrue(path.isAbsolute(), "Path '" + path + "' must be absolute");
@@ -188,6 +195,13 @@ public class ShadowCopy implements AutoCloseable {
     }
 
     private List<String> run(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        LOGGER.atInfo().log("run of : {}", commands);
+        TeeList liste = new TeeList(logInfo);
+        runService.runCommand(liste::add,commands,null);
+        return liste.getList();
+    }
+
+    private List<String> run2(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
         LOGGER.atInfo().log("run of : {}", commands);
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(commands);

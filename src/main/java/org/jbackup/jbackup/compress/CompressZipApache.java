@@ -6,6 +6,7 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.jbackup.jbackup.exception.JBackupException;
+import org.jbackup.jbackup.service.RunService;
 import org.jbackup.jbackup.shadowcopy.StreamGobbler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,28 +38,31 @@ public class CompressZipApache implements CompressWalk {
 
     private Optional<Long> splitSize;
 
-    private ExecutorService executorService;
+//    private ExecutorService executorService;
 
-    public CompressZipApache(String file, Optional<Long> splitSize) {
+    private final RunService runService;
+
+    public CompressZipApache(String file, Optional<Long> splitSize, RunService runService) {
         this.file = file;
         this.splitSize = splitSize;
+        this.runService=Objects.requireNonNull(runService,"runService is null");
     }
 
     public void init() {
-        LOGGER.info("init executorService");
-        BasicThreadFactory factory = new BasicThreadFactory.Builder()
-                .namingPattern("substr-%d")
-                .uncaughtExceptionHandler((thread, exception) -> {
-                    LOGGER.error("Erreur (thread: {})", thread, exception);
-                })
-                .build();
-        executorService = Executors.newCachedThreadPool(factory);
+//        LOGGER.info("init executorService");
+//        BasicThreadFactory factory = new BasicThreadFactory.Builder()
+//                .namingPattern("substr-%d")
+//                .uncaughtExceptionHandler((thread, exception) -> {
+//                    LOGGER.error("Erreur (thread: {})", thread, exception);
+//                })
+//                .build();
+//        executorService = Executors.newCachedThreadPool(factory);
     }
 
     public void terminate() {
-        LOGGER.info("fin du executorService");
-        executorService.shutdown();
-        LOGGER.info("fin du executorService OK");
+//        LOGGER.info("fin du executorService");
+//        executorService.shutdown();
+//        LOGGER.info("fin du executorService OK");
     }
 
     @Override
@@ -154,7 +158,7 @@ public class CompressZipApache implements CompressWalk {
                         };
                         String s2 = "";
                         if (Files.isDirectory(p)) {
-                            s2 = p.toString();
+//                            s2 = p.toString();
                             throw new JBackupException("Erreur:" + p);
                         } else {
                             s2 = p.getParent().toString();
@@ -166,7 +170,7 @@ public class CompressZipApache implements CompressWalk {
                         listParameter.add(lettreTrouve + ":");
                         listParameter.add(s2);
                         try {
-                            int res = runCommand(consumer, listParameter.toArray(new String[0]));
+                            int res = runService.runCommand(consumer, listParameter,null);
                             LOGGER.info("res exec: {}", res);
                             if (res != 0) {
                                 LOGGER.error("Erreur pour creer le drive {}", lettreTrouve);
@@ -209,7 +213,8 @@ public class CompressZipApache implements CompressWalk {
                 listParameter.add(lettreTrouve + ":");
                 listParameter.add("/D");
                 try {
-                    int res = runCommand(consumer, listParameter.toArray(new String[0]));
+                    int res =runService.runCommand(consumer, listParameter,null);
+//                    int res = runCommand(consumer, listParameter.toArray(new String[0]));
                     LOGGER.info("res exec: {}", res);
                     if (res != 0) {
                         LOGGER.error("Erreur pour supprimer le drive {}", lettreTrouve);
@@ -219,7 +224,7 @@ public class CompressZipApache implements CompressWalk {
                         LOGGER.atInfo().log("driver {} supprimé", lettreTrouve);
                     }
                 } catch (IOException | InterruptedException e) {
-                    throw new JBackupException("Erreur pour ", e);
+                    throw new JBackupException("Erreur pour supprimer le drive", e);
                 }
             }
             archive.closeArchiveEntry();
@@ -231,39 +236,39 @@ public class CompressZipApache implements CompressWalk {
     }
 
 
-    private int runCommand(Consumer<String> consumer, String... commandes) throws InterruptedException, IOException {
-        ProcessBuilder builder = new ProcessBuilder();
-        List<String> liste = new ArrayList<>();
-        List<String> listeShow = new ArrayList<>();
-        for (String s : commandes) {
-            var s2 = s;
-            if (s.contains(" ")) {
-                s2 = "\"" + s + "\"";
-            }
-            liste.add(s2);
-            if (s.startsWith("-p")) {
-                listeShow.add("-pXXX");
-            } else {
-                listeShow.add(s2);
-            }
-        }
-        LOGGER.info("run {}", listeShow);
-        LOGGER.trace("run {}", liste);
-        builder.command(liste);
-        Process process = builder.start();
-        StreamGobbler streamGobbler =
-                new StreamGobbler(process.getInputStream(), consumer::accept);
-        executorService.submit(streamGobbler);
-        StreamGobbler streamGobblerErrur =
-                new StreamGobbler(process.getErrorStream(), (x) -> {
-                    LOGGER.error("error: {}", x);
-                });
-        executorService.submit(streamGobblerErrur);
-        LOGGER.info("run ...");
-        var res = process.waitFor();
-        LOGGER.info("run end");
-        return res;
-    }
+//    private int runCommand(Consumer<String> consumer, String... commandes) throws InterruptedException, IOException {
+//        ProcessBuilder builder = new ProcessBuilder();
+//        List<String> liste = new ArrayList<>();
+//        List<String> listeShow = new ArrayList<>();
+//        for (String s : commandes) {
+//            var s2 = s;
+//            if (s.contains(" ")) {
+//                s2 = "\"" + s + "\"";
+//            }
+//            liste.add(s2);
+//            if (s.startsWith("-p")) {
+//                listeShow.add("-pXXX");
+//            } else {
+//                listeShow.add(s2);
+//            }
+//        }
+//        LOGGER.info("run {}", listeShow);
+//        LOGGER.trace("run {}", liste);
+//        builder.command(liste);
+//        Process process = builder.start();
+//        StreamGobbler streamGobbler =
+//                new StreamGobbler(process.getInputStream(), consumer::accept);
+//        executorService.submit(streamGobbler);
+//        StreamGobbler streamGobblerErrur =
+//                new StreamGobbler(process.getErrorStream(), (x) -> {
+//                    LOGGER.error("error: {}", x);
+//                });
+//        executorService.submit(streamGobblerErrur);
+//        LOGGER.info("run ...");
+//        var res = process.waitFor();
+//        LOGGER.info("run end");
+//        return res;
+//    }
 
     private ZipEntry createZipEntry(Path p, String name) throws IOException {
         boolean isDirectory = Files.isDirectory(p);
@@ -298,7 +303,7 @@ public class CompressZipApache implements CompressWalk {
     @Override
     public void addDir(String name, Path p) {
         try {
-            var entry = createZipEntry(p, name);
+//            var entry = createZipEntry(p, name);
             ZipArchiveEntry entry_1;
 //            entry_1 = new ZipArchiveEntry(entry);
             entry_1 = new ZipArchiveEntry(p.toFile(), name);
