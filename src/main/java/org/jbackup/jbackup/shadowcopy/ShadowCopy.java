@@ -115,9 +115,6 @@ public class ShadowCopy implements AutoCloseable {
     }
 
     public void close() {
-        for (var entry : map.entrySet()) {
-            deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
-        }
         for (var entry : mapLink.entrySet()) {
             var path = entry.getValue().getParent();
             try {
@@ -129,6 +126,9 @@ public class ShadowCopy implements AutoCloseable {
             } catch (IOException e) {
                 LOGGER.error("Can't delete link for {}", path, e);
             }
+        }
+        for (var entry : map.entrySet()) {
+            deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
         }
     }
 
