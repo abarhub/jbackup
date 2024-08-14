@@ -2,6 +2,7 @@ package org.jbackup.jbackup.properties;
 
 import org.springframework.util.unit.DataSize;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
@@ -19,6 +20,8 @@ public class GithubProperties {
     private boolean disabled;
     private Duration connexionTimeout;
     private Duration readTimeout;
+    private boolean updateReposByDate;
+    private Path dataRep;
 
     public String getUser() {
         return user;
@@ -114,5 +117,21 @@ public class GithubProperties {
 
     public void setReadTimeout(Duration readTimeout) {
         this.readTimeout = readTimeout;
+    }
+
+    public boolean isUpdateReposByDate() {
+        return updateReposByDate;
+    }
+
+    public void setUpdateReposByDate(boolean updateReposByDate) {
+        this.updateReposByDate = updateReposByDate;
+    }
+
+    public Path getDataRep() {
+        return dataRep;
+    }
+
+    public void setDataRep(Path dataRep) {
+        this.dataRep = dataRep;
     }
 }

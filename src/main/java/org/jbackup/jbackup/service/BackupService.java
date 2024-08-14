@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.CollectionUtils;
 
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -55,17 +54,22 @@ public class BackupService {
 
     private final AtomicInteger counter = new AtomicInteger(1);
 
+    private final DataService dataService;
+
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService,
-                         RunService runService) {
+                         RunService runService,
+                         DataService dataService) {
         this.jBackupProperties = jBackupProperties;
         this.backupGithubService = backupGithubService;
         this.runService=Objects.requireNonNull(runService,"runService is null");
+        this.dataService = Objects.requireNonNull(dataService);
     }
 
     public void backup() {
         try {
             LOGGER.info("backup ...");
+            dataService.load();
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
 
                 try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService, counter)) {
@@ -144,6 +148,7 @@ public class BackupService {
                     && !jBackupProperties.getGithub().isDisabled()) {
                 backupGithubService.backup(jBackupProperties.getGithub());
             }
+            dataService.save();
             LOGGER.info("backup OK");
         } catch (Exception e) {
             LOGGER.error("Error", e);

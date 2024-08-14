@@ -1,16 +1,20 @@
 package org.jbackup.jbackup.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.jbackup.jbackup.data.GithubData;
 import org.jbackup.jbackup.domain.Project;
 import org.jbackup.jbackup.exception.JBackupException;
 import org.jbackup.jbackup.properties.GithubProperties;
 import org.jbackup.jbackup.utils.RunProgram;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -20,13 +24,15 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.*;
 
 public class BackupGithubService {
@@ -46,6 +52,12 @@ public class BackupGithubService {
     private int nbGitWikiKO;
 
     private GithubProperties github;
+
+    private final DataService dataService;
+
+    public BackupGithubService(DataService dataService) {
+        this.dataService = dataService;
+    }
 
     public void backup(GithubProperties github) {
         var debut = Instant.now();
@@ -88,8 +100,7 @@ public class BackupGithubService {
             exchanged = exchanged.defaultHeader("X-GitHub-Api-Version", github.getApiVersion());
         }
         WebClient client = exchanged.build();
-        HttpServiceProxyFactory factory = HttpServiceProxyFactory
-                .builder(WebClientAdapter.forClient(client)).build();
+        HttpServiceProxyFactory factory = HttpServiceProxyFactory.builderFor(WebClientAdapter.create(client)).build();
 
         return factory.createClient(GithubService.class);
     }
@@ -123,7 +134,8 @@ public class BackupGithubService {
                         throw new JBackupException("Erreur pour créer le répertoire " + rep.getParent(), e);
                     }
                 }
-                var res = updateGit(rep, projet.getNom(), projet.getCloneUrl(), github.isMirror());
+                var res = updateGit(rep, projet.getNom(), projet.getCloneUrl(), github.isMirror(),
+                        github.isUpdateReposByDate(), projet);
                 nbGitRepo++;
                 if (!res) {
                     LOGGER.atError().log("Erreur pour mettre à jour le reporitory {}", rep);
@@ -132,7 +144,7 @@ public class BackupGithubService {
 
                 enregistreReleases(githubService, github, instant, projet);
                 if (projet.isHasWiki()) {
-                    enregistreWiki(githubService, github, instant, projet);
+                    enregistreWiki(github, projet);
                 }
             }
         }
@@ -175,11 +187,17 @@ public class BackupGithubService {
                                 var url = project.get("url").asText();
                                 var urlClone = project.get("clone_url").asText();
                                 var wiki = project.get("has_wiki").asBoolean(false);
+                                var createAt = convertLocalDateTime(project.get("created_at").asText());
+                                var updatedAt = convertLocalDateTime(project.get("updated_at").asText());
+                                var pushedAt = convertLocalDateTime(project.get("pushed_at").asText());
                                 var projet = new Project();
                                 projet.setNom(nom);
                                 projet.setUrl(url);
                                 projet.setCloneUrl(urlClone);
                                 projet.setHasWiki(wiki);
+                                projet.setCreatedAt(createAt);
+                                projet.setUpdatedAt(updatedAt);
+                                projet.setPushedAt(pushedAt);
                                 listeProjet.add(projet);
                                 LOGGER.atInfo().log("{}: {} ({})", nom, url, urlClone);
                             }
@@ -200,16 +218,26 @@ public class BackupGithubService {
         return listeProjet;
     }
 
+    private LocalDateTime convertLocalDateTime(String dateStr) {
+        if (StringUtils.isNotBlank(dateStr)) {
+            var res = ZonedDateTime.parse(dateStr).toLocalDateTime();
+            LOGGER.atDebug().log("dateStr:{}, date:{}", dateStr, res);
+            return res;
+        } else {
+            return null;
+        }
+    }
+
     private void listeProjetsDifferents(List<Project> listeProjet, Path pathRoot) {
-        try {
-            var listeRemote = listeProjet.stream().map(x -> x.getNom()).toList();
-            var listeLocal = Files.list(pathRoot).map(x -> x.getFileName().toString()).toList();
+        try (var listeFiles = Files.list(pathRoot)) {
+            var listeRemote = listeProjet.stream().map(Project::getNom).toList();
+            var listeLocal = listeFiles.map(x -> x.getFileName().toString()).toList();
             LOGGER.atDebug().log("liste des projets en remote : {}", listeRemote);
             LOGGER.atDebug().log("liste des projets en local : {}", listeLocal);
             Set<String> liste1 = new TreeSet<>(listeRemote);
-            liste1.removeAll(listeLocal);
+            listeLocal.forEach(liste1::remove);
             Set<String> liste2 = new TreeSet<>(listeLocal);
-            liste2.removeAll(listeRemote);
+            listeRemote.forEach(liste2::remove);
             LOGGER.atInfo().log("liste des projets en remote en trop: {}", liste1);
             LOGGER.atInfo().log("liste des projet en local en trop: {}", liste2);
         } catch (IOException e) {
@@ -217,24 +245,49 @@ public class BackupGithubService {
         }
     }
 
-    private boolean updateGit(Path rep, String nom, String cloneUrl, boolean mirror) {
+    private boolean updateGit(Path rep, String nom, String cloneUrl, boolean mirror,
+                              boolean updateReposByDate, Project projet) {
         List<String> tab, tab2;
-        final var debut="https://";
-        var cloneUrlShow=cloneUrl;
+        final var debut = "https://";
+        var cloneUrlShow = cloneUrl;
         if (cloneUrl.startsWith(debut)) {
-            cloneUrl = cloneUrl.substring(0, debut.length()) + github.getUser() + ":" + github.getToken() + "@" + cloneUrl.substring(debut.length());
-            cloneUrlShow=cloneUrl.substring(0, debut.length()) + github.getUser() + ":XXX@" + cloneUrl.substring(debut.length());
+            final var cloneUrl0 = cloneUrl;
+            cloneUrl = cloneUrl0.substring(0, debut.length()) + github.getUser() + ":" + github.getToken() + "@" + cloneUrl0.substring(debut.length());
+            cloneUrlShow = cloneUrl0.substring(0, debut.length()) + github.getUser() + ":XXX@" + cloneUrl0.substring(debut.length());
         }
         if (mirror) {
 
             LOGGER.atInfo().log("clone mirror {} ({})", nom, cloneUrlShow);
             tab = List.of("git", "clone", "--mirror", cloneUrl, rep.toString());
-            tab2= List.of("git", "clone", "--mirror", cloneUrlShow, rep.toString());
+            tab2 = List.of("git", "clone", "--mirror", cloneUrlShow, rep.toString());
         } else {
             if (Files.exists(rep)) {
                 LOGGER.atInfo().log("pull {}", nom);
                 tab = List.of("git", "-C", rep.toString(), "pull", "--all");
-                tab2=tab;
+                tab2 = tab;
+                if (updateReposByDate && projet != null) {
+                    LocalDateTime lastDateCommit = null;
+                    LocalDateTime lastDateTraitement = null;
+                    if (projet.getPushedAt() != null) {
+                        lastDateCommit = projet.getPushedAt();
+                    }
+                    if (projet.getUpdatedAt() != null && (lastDateCommit == null || lastDateCommit.isBefore(projet.getUpdatedAt()))) {
+                        lastDateCommit = projet.getUpdatedAt();
+                    }
+                    if (projet.getCreatedAt() != null && (lastDateCommit == null || lastDateCommit.isBefore(projet.getCreatedAt()))) {
+                        lastDateCommit = projet.getCreatedAt();
+                    }
+                    var map = dataService.getjBackupData().getListeGithub();
+                    if (map != null && map.containsKey(nom)) {
+                        lastDateTraitement = map.get(nom).getDate();
+                    }
+                    if (lastDateTraitement != null && lastDateCommit != null && lastDateCommit.isBefore(lastDateTraitement)) {
+                        LOGGER.atInfo().log("pas de pull pour {}, car pas de mise à jour " +
+                                        "(dernier commit: {}, dernier import: {})",
+                                nom, lastDateCommit, lastDateTraitement);
+                        return true;
+                    }
+                }
             } else {
                 LOGGER.atInfo().log("clone {} ({})", nom, cloneUrlShow);
                 tab = List.of("git", "clone", cloneUrl, rep.toString());
@@ -249,6 +302,15 @@ public class BackupGithubService {
                 return false;
             } else {
                 LOGGER.info("res={}", res);
+                var map = dataService.getjBackupData().getListeGithub();
+                if (map.containsKey(nom)) {
+                    map.get(nom).setDate(LocalDateTime.now());
+                } else {
+                    GithubData data = new GithubData();
+                    data.setNom(nom);
+                    data.setDate(LocalDateTime.now());
+                    map.put(nom, data);
+                }
                 return true;
             }
         } catch (IOException | InterruptedException e) {
@@ -312,7 +374,10 @@ public class BackupGithubService {
     private void enregistreEtoiles(GithubService githubService, GithubProperties github, Instant instant) {
         var fin = false;
         var no = 0;
+        JsonNode root = null;
         LOGGER.atInfo().log("Enregistrement des étoiles ...");
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         do {
             Map<String, Object> map = new HashMap<>();
             map.put("per_page", 100);
@@ -332,17 +397,29 @@ public class BackupGithubService {
                         String body = response.getBody();
                         LOGGER.atDebug().log("response:  {}", body);
 
-                        var rep = Paths.get(github.getDest(), "starred");
-                        try {
-                            Files.createDirectories(rep);
-                            var path2 = rep.resolve("starred_" + instant.getEpochSecond() + "_" + no + ".json");
-                            var res = enregistreJsonSiNonVide(path2, body);
-                            if (res != null) {
-                                aucuneDonnees = false;
+                        if (StringUtils.isNotBlank(body)) {
+                            try {
+                                JsonNode actualObj = mapper.readTree(body);
+                                if (actualObj != null && actualObj.isArray() && !actualObj.isEmpty()) {
+                                    aucuneDonnees = false;
+                                    if (root == null) {
+                                        root = actualObj;
+                                    } else {
+                                        if (root instanceof ArrayNode && actualObj instanceof ArrayNode) {
+                                            ((ArrayNode) root).addAll((ArrayNode) actualObj);
+                                        } else {
+                                            Assert.isTrue(root.isArray(), "root n'est pas un tableau");
+                                            Assert.isTrue(actualObj.isArray(), "actualObj n'est pas un tableau");
+                                        }
+                                    }
+                                }
+
+                            } catch (JsonProcessingException e) {
+                                LOGGER.atError().log("Erreur pour ce body: {}", body);
+                                throw new JBackupException("Erreur pour parser le flux", e);
                             }
-                        } catch (IOException e) {
-                            throw new JBackupException("Erreur pour enregistre les informations de l'utilisateur", e);
                         }
+
                     }
                     if (aucuneDonnees) {
                         fin = true;
@@ -355,6 +432,18 @@ public class BackupGithubService {
             }
             no++;
         } while (!fin);
+        if (root != null) {
+            var rep = Paths.get(github.getDest(), "starred");
+            try {
+                Files.createDirectories(rep);
+                no = 0;
+                var path2 = rep.resolve("starred_" + instant.getEpochSecond() + "_" + no + ".json");
+                var body = mapper.writeValueAsString(root);
+                enregistreJsonSiNonVide(path2, body);
+            } catch (IOException e) {
+                throw new JBackupException("Erreur pour enregistre les informations de l'utilisateur", e);
+            }
+        }
         LOGGER.atInfo().log("Enregistrement des étoiles ok");
     }
 
@@ -404,7 +493,7 @@ public class BackupGithubService {
                                                 Files.createDirectories(rep2.getParent());
                                             }
                                             LOGGER.atInfo().log("mise à jour de {}", rep2);
-                                            var res = updateGit(rep2, id, urlPull, github.isMirror());
+                                            var res = updateGit(rep2, id, urlPull, github.isMirror(), false, null);
                                             nbGitGist++;
                                             if (!res) {
                                                 LOGGER.atError().log("Erreur pour mettre à jour le reporitory {}", rep2);
@@ -500,7 +589,7 @@ public class BackupGithubService {
                                                         if (Files.notExists(f)) {
                                                             LOGGER.atInfo().log("Enregistre le fichier {} (url: {}) ...", f, urlFile);
                                                             FileUtils.copyURLToFile(
-                                                                    new URL(urlFile),
+                                                                    URI.create(urlFile).toURL(),
                                                                     f.toFile(),
                                                                     Math.toIntExact(github.getConnexionTimeout().toMillis()),
                                                                     Math.toIntExact(github.getReadTimeout().toMillis()));
@@ -532,7 +621,7 @@ public class BackupGithubService {
         LOGGER.atInfo().log("Enregistrement release ok");
     }
 
-    private void enregistreWiki(GithubService githubService, GithubProperties github, Instant instant, Project projet) {
+    private void enregistreWiki(GithubProperties github, Project projet) {
         LOGGER.atInfo().log("Enregistrement wiki ...");
         var rep = Paths.get(github.getDest(), "wiki", projet.getNom());
         var path = rep.resolve("wiki");
@@ -540,7 +629,7 @@ public class BackupGithubService {
         if (url.endsWith(".git")) {
             url = url.substring(0, url.length() - 4) + ".wiki.git";
             LOGGER.atInfo().log("clonage du wiki {} ({},{}) ...", projet.getNom(), url, path);
-            var res = updateGit(path, projet.getNom(), url, false);
+            var res = updateGit(path, projet.getNom(), url, false, false, projet);
             if (!res) {
                 nbGitWikiKO++;
                 LOGGER.atWarn().log("Le clonage a echouer pour le wiki du projet {}", projet.getNom());

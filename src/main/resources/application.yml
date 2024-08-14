@@ -36,5 +36,7 @@ jbackup:
     disabled: true
     connexionTimeout: 2m
     readTimeout: 2m
+    updateReposByDate: true
+    dataRep:
 
 
