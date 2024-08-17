@@ -7,6 +7,7 @@ public class SaveProperties {
     private List<String> path;
 
     private String dest;
+    private String destCrypt;
 
     private List<String> exclude;
     private List<String> include;
@@ -43,6 +44,14 @@ public class SaveProperties {
 
     public void setDest(String dest) {
         this.dest = dest;
+    }
+
+    public String getDestCrypt() {
+        return destCrypt;
+    }
+
+    public void setDestCrypt(String destCrypt) {
+        this.destCrypt = destCrypt;
     }
 
     public boolean isDisabled() {

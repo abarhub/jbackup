@@ -32,7 +32,6 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -76,7 +75,7 @@ public class BackupService {
             dataService.load();
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
                 Instant debutBackup = Instant.now();
-                try (LinkService linkService= factoryService.linkService(); ShadowCopy shadowCopyUtils = factoryService.getShadowService(linkService)) {
+                try (LinkService linkService = factoryService.linkService(); ShadowCopy shadowCopyUtils = factoryService.getShadowService(linkService)) {
                     for (var entry : jBackupProperties.getDir().entrySet()) {
                         var save = entry.getValue();
                         if (save.isDisabled()) {
@@ -131,6 +130,9 @@ public class BackupService {
                                     }
 
                                     if (compress instanceof CompressWalk compressWalk) {
+                                        if (Files.notExists(p)) {
+                                            throw new JBackupException("Le répertoire '{}' n'existe pas");
+                                        }
                                         LOGGER.atInfo().log("compress {} ...", p);
                                         save3(compressWalk, p, p.getFileName().toString(), save);
                                         LOGGER.atInfo().log("compress {} OK", p);
@@ -140,7 +142,7 @@ public class BackupService {
                                     }
                                 }
                             }
-                            terminate(filename);
+                            terminate(filename, save);
 //                                }
                             //}
                             LOGGER.info("backup {} ok ({})", entry.getKey(), Duration.between(debut, Instant.now()));
@@ -164,13 +166,13 @@ public class BackupService {
         LOGGER.info("duree: total={}, backup={}, git={}", dureeTotale, dureeBackup, dureeBackupGit);
     }
 
-    private void terminate(String file) {
-        var listFiles = crypt(file);
+    private void terminate(String file, SaveProperties save) {
+        var listFiles = crypt(file, save);
         var fileHash = calculateHash(listFiles, file);
-        checkFiles(file, listFiles, fileHash);
+        checkFiles(file, listFiles, fileHash, save);
     }
 
-    private void checkFiles(String file, List<String> listFiles, Path fileHash) {
+    private void checkFiles(String file, List<String> listFiles, Path fileHash, SaveProperties save) {
         LOGGER.atInfo().log("Check files ...");
         Map<String, String> hash = new HashMap<>();
         try {
@@ -194,6 +196,9 @@ public class BackupService {
         for (var p : listFiles) {
             if (p.endsWith(EXTENSION_CRP)) {
                 Path fileNotCrypted = Path.of(p.substring(0, p.length() - 4));
+                if(StringUtils.isNotBlank(save.getDestCrypt())){
+                    fileNotCrypted=Path.of(save.getDest()).resolve(fileNotCrypted.getFileName());
+                }
                 if (Files.notExists(fileNotCrypted)) {
                     throw new JBackupException("File '" + fileNotCrypted + "' not exist");
                 }
@@ -300,13 +305,18 @@ public class BackupService {
         return f;
     }
 
-    private List<String> crypt(String file) {
+    private List<String> crypt(String file, SaveProperties save) {
         List<String> listeFiles = new ArrayList<>();
         listeFiles.add(file);
         var p = Path.of(file);
         if (Files.exists(p)) {
             try {
-                var fileCrypt = p + EXTENSION_CRP;
+                String fileCrypt;
+                if (StringUtils.isNotBlank(save.getDestCrypt())) {
+                    fileCrypt = save.getDestCrypt() + "/" + p.getFileName() + EXTENSION_CRP;
+                } else {
+                    fileCrypt = p + EXTENSION_CRP;
+                }
                 listeFiles.add(fileCrypt);
                 AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
                 crypt.encrypt(2, p.toString(), fileCrypt);
@@ -331,7 +341,12 @@ public class BackupService {
         for (var p3 : liste) {
             try {
                 listeFiles.add(p3.toString());
-                var fileCrypt = p3 + EXTENSION_CRP;
+                String fileCrypt;
+                if (StringUtils.isNotBlank(save.getDestCrypt())) {
+                    fileCrypt = save.getDestCrypt() + "/" + p3.getFileName() + EXTENSION_CRP;
+                } else {
+                    fileCrypt = p3 + EXTENSION_CRP;
+                }
                 listeFiles.add(fileCrypt);
                 AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
                 crypt.encrypt(2, p3.toString(), fileCrypt);
@@ -380,21 +395,21 @@ public class BackupService {
     }
 
     private void save3(CompressWalk compress, Path p, String directory, SaveProperties save) {
-        LOGGER.debug("save3({}) ...",p);
+        LOGGER.debug("save3({}) ...", p);
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
                     LOGGER.debug("ignore {}", x);
                 } else {
                     if (Files.isDirectory(x)) {
-                        LOGGER.debug("entre dir {}",x);
+                        LOGGER.debug("entre dir {}", x);
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
                         compress.addDir(dir, x);
                         save3(compress, x, dir, save);
-                        LOGGER.debug("sort dir {}",x);
+                        LOGGER.debug("sort dir {}", x);
                     } else {
                         if (include(x, save)) {
-                            LOGGER.debug("save file {}",x);
+                            LOGGER.debug("save file {}", x);
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
                         } else {
@@ -406,7 +421,7 @@ public class BackupService {
         } catch (IOException e) {
             throw new RuntimeException("Error for save for '" + p + "' (dir=" + directory + ")", e);
         }
-        LOGGER.debug("save3({}) OK",p);
+        LOGGER.debug("save3({}) OK", p);
     }
 
     private boolean isShadowCopy() {

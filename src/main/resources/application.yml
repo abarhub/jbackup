@@ -17,6 +17,7 @@ jbackup:
       #path: D:/temp/amdfx
       path: D:/temp/apache-tomcat-9.0.30/
       dest: D:/temp/backup_test
+      destCrypt: D:/temp/backup_test_crypt
       include:
       #include: '**/*.txt,**/*.jsp'
       #include: '*.txt'
