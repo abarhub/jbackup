@@ -1,25 +1,24 @@
 package org.jbackup.jbackup.shadowcopy;
 
 import org.jbackup.jbackup.exception.JBackupException;
+import org.jbackup.jbackup.service.LinkService;
 import org.jbackup.jbackup.service.RunService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 public class ShadowCopy implements AutoCloseable {
 
@@ -27,15 +26,13 @@ public class ShadowCopy implements AutoCloseable {
 
     private final Map<Character, ShadowPath> map = new ConcurrentHashMap<>();
 
-    private final Map<Path, Path> mapLink = new ConcurrentHashMap<>();
-
-    private final AtomicInteger counter;
-
     private final RunService runService;
 
-    public ShadowCopy(RunService runService,AtomicInteger compteur) {
+    private final LinkService linkService;
+
+    public ShadowCopy(RunService runService, LinkService linkService) {
         this.runService = runService;
-        this.counter=compteur;
+        this.linkService = linkService;
     }
 
     public Path getPath(Path path) {
@@ -72,30 +69,40 @@ public class ShadowCopy implements AutoCloseable {
 //            s3="\\\\.\\"+s3.substring(4);
 //        }
         Path p3;
-        if (!mapLink.containsKey(path)) {
-            var linkDebut = p.volume() + ":/linkjb";
-            var link = linkDebut;
-            var i = counter.getAndIncrement();
-            if (i > 1) {
-                linkDebut += i;
-            }
-            while (Files.exists(Path.of(link))) {
-                i = counter.getAndIncrement();
-                link = linkDebut + i;
-            }
-            var linkp = Path.of(link);
-            var cible = Path.of(s3).getParent();
-            LOGGER.info("création du lien '{}' -> '{}'", linkp, cible);
-            try {
-                Files.createSymbolicLink(linkp, cible);
-            } catch (IOException e) {
-                throw new JBackupException("Erreur pour creer le lien '" + linkp + "' -> '" + cible + "' : " + e.getMessage(), e);
-            }
-            p3 = linkp.resolve(Path.of(s3).getFileName());
-            mapLink.put(path, p3);
-        } else {
-            p3 = mapLink.get(path);
-        }
+        p3 = linkService.getLink(p, path);
+//        if (!mapLink.containsKey(path)) {
+//            var linkDebut = p.volume() + ":/linkjb";
+//            var link = linkDebut;
+//            var i = counter.getAndIncrement();
+//            if (i > 1) {
+//                linkDebut += i;
+//            }
+//            while (Files.exists(Path.of(link), LinkOption.NOFOLLOW_LINKS)) {
+//                LOGGER.atInfo().log("lien {} existe", link);
+//                i = counter.getAndIncrement();
+//                link = linkDebut + i;
+//            }
+//            LOGGER.atInfo().log("lien {} n'existe pas (exist:({}, {}), not_exist:({}, {}))",
+//                    link,
+//                    Files.exists(Path.of(link)),
+//                    Files.exists(Path.of(link), LinkOption.NOFOLLOW_LINKS),
+//                    Files.notExists(Path.of(link)),
+//                    Files.notExists(Path.of(link), LinkOption.NOFOLLOW_LINKS));
+//            var linkp = Path.of(link);
+//            var cible = Path.of(s3).getParent();
+//            LOGGER.info("création du lien '{}' -> '{}'", linkp, cible);
+//            try {
+//                LOGGER.info("création du lien '{}' ...", linkp);
+//                Files.createSymbolicLink(linkp, cible);
+//                LOGGER.info("création du lien '{}' ok", linkp);
+//            } catch (IOException e) {
+//                throw new JBackupException("Erreur pour creer le lien '" + linkp + "' -> '" + cible + "' : " + e.getMessage(), e);
+//            }
+//            p3 = linkp.resolve(Path.of(s3).getFileName());
+//            mapLink.put(path, p3);
+//        } else {
+//            p3 = mapLink.get(path);
+//        }
 //        return Path.of(s3);
         return p3;
     }
@@ -121,7 +128,7 @@ public class ShadowCopy implements AutoCloseable {
         for (var entry : map.entrySet()) {
             deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
         }
-        if(false) {
+        if (false) {
             try {
                 var duration = Duration.of(60, ChronoUnit.SECONDS);
                 LOGGER.atInfo().log("attente ...");
@@ -130,18 +137,19 @@ public class ShadowCopy implements AutoCloseable {
                 LOGGER.atWarn().log("timeout", e);
             }
         }
-        for (var entry : mapLink.entrySet()) {
-            var path = entry.getValue().getParent();
-            try {
-                LOGGER.info("Suppression du link {} ...", path);
-                //var deletedIfExists = Files.deleteIfExists(entry.getValue());
-//                Files.delete(path);
-                var deletedIfExists = Files.deleteIfExists(path);
-                LOGGER.info("Suppression du link {} OK (deleted={})", path, deletedIfExists);
-            } catch (IOException e) {
-                LOGGER.error("Can't delete link for {}", path, e);
-            }
-        }
+        linkService.close();
+//        for (var entry : mapLink.entrySet()) {
+//            var path = entry.getValue().getParent();
+//            try {
+//                LOGGER.info("Suppression du link {} ...", path);
+//                //var deletedIfExists = Files.deleteIfExists(entry.getValue());
+////                Files.delete(path);
+//                var deletedIfExists = Files.deleteIfExists(path);
+//                LOGGER.info("Suppression du link {} OK (deleted={})", path, deletedIfExists);
+//            } catch (IOException e) {
+//                LOGGER.error("Can't delete link for {}", path, e);
+//            }
+//        }
     }
 
     private Optional<String> createShadowCopy(char volume) {
@@ -211,7 +219,7 @@ public class ShadowCopy implements AutoCloseable {
     private List<String> run(List<String> commands, boolean logInfo) throws IOException, InterruptedException, ExecutionException, TimeoutException {
         LOGGER.atInfo().log("run of : {}", commands);
         TeeList liste = new TeeList(logInfo);
-        runService.runCommand(liste::add,commands,null);
+        runService.runCommand(liste::add, commands, null);
         return liste.getList();
     }
 

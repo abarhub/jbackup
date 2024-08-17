@@ -37,6 +37,6 @@ jbackup:
     connexionTimeout: 2m
     readTimeout: 2m
     updateReposByDate: true
-    dataRep:
+    dataRep: ${jbackup.github.dest}/data/data.json
 
 

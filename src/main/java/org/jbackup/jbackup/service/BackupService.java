@@ -52,18 +52,20 @@ public class BackupService {
 
     private final RunService runService;
 
-    private final AtomicInteger counter = new AtomicInteger(1);
-
     private final DataService dataService;
+
+    private final FactoryService factoryService;
 
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService,
                          RunService runService,
-                         DataService dataService) {
+                         DataService dataService,
+                         FactoryService factoryService) {
         this.jBackupProperties = jBackupProperties;
         this.backupGithubService = backupGithubService;
         this.runService = Objects.requireNonNull(runService, "runService is null");
         this.dataService = Objects.requireNonNull(dataService);
+        this.factoryService = Objects.requireNonNull(factoryService, "factoryService is null");
     }
 
     public void backup() {
@@ -74,7 +76,7 @@ public class BackupService {
             dataService.load();
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
                 Instant debutBackup = Instant.now();
-                try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService, counter)) {
+                try (LinkService linkService= factoryService.linkService(); ShadowCopy shadowCopyUtils = factoryService.getShadowService(linkService)) {
                     for (var entry : jBackupProperties.getDir().entrySet()) {
                         var save = entry.getValue();
                         if (save.isDisabled()) {
@@ -381,7 +383,7 @@ public class BackupService {
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
-                    LOGGER.info("ignore {}", x);
+                    LOGGER.debug("ignore {}", x);
                 } else {
                     if (Files.isDirectory(x)) {
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
@@ -392,7 +394,7 @@ public class BackupService {
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
                         } else {
-                            LOGGER.info("not include {}", x);
+                            LOGGER.debug("not include {}", x);
                         }
                     }
                 }

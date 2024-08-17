@@ -1,10 +1,7 @@
 package org.jbackup.jbackup.config;
 
 import org.jbackup.jbackup.properties.JBackupProperties;
-import org.jbackup.jbackup.service.BackupGithubService;
-import org.jbackup.jbackup.service.BackupService;
-import org.jbackup.jbackup.service.DataService;
-import org.jbackup.jbackup.service.RunService;
+import org.jbackup.jbackup.service.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,8 +16,10 @@ public class ServiceConfiguration {
     @Bean
     public BackupService backupService(JBackupProperties jBackupProperties,
                                        BackupGithubService backupGithubService,
-                                       RunService runService, DataService dataService) {
-        return new BackupService(jBackupProperties, backupGithubService, runService, dataService);
+                                       RunService runService, DataService dataService,
+                                       FactoryService factoryService) {
+        return new BackupService(jBackupProperties, backupGithubService,
+                runService, dataService, factoryService);
     }
 
     @Bean
@@ -31,5 +30,10 @@ public class ServiceConfiguration {
     @Bean
     public DataService dataService(JBackupProperties jBackupProperties) {
         return new DataService(jBackupProperties);
+    }
+
+    @Bean
+    public FactoryService factoryService(RunService runService) {
+        return new FactoryService(runService);
     }
 }
