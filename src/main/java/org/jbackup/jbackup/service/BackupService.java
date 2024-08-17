@@ -380,17 +380,21 @@ public class BackupService {
     }
 
     private void save3(CompressWalk compress, Path p, String directory, SaveProperties save) {
+        LOGGER.debug("save3({}) ...",p);
         try (var listFiles = Files.list(p)) {
             listFiles.forEach(x -> {
                 if (exclude(x, save)) {
                     LOGGER.debug("ignore {}", x);
                 } else {
                     if (Files.isDirectory(x)) {
+                        LOGGER.debug("entre dir {}",x);
                         var dir = PathUtils.getPath(directory, x.getFileName().toString());
                         compress.addDir(dir, x);
                         save3(compress, x, dir, save);
+                        LOGGER.debug("sort dir {}",x);
                     } else {
                         if (include(x, save)) {
+                            LOGGER.debug("save file {}",x);
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
                         } else {
@@ -402,6 +406,7 @@ public class BackupService {
         } catch (IOException e) {
             throw new RuntimeException("Error for save for '" + p + "' (dir=" + directory + ")", e);
         }
+        LOGGER.debug("save3({}) OK",p);
     }
 
     private boolean isShadowCopy() {
