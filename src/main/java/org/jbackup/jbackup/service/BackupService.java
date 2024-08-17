@@ -48,7 +48,7 @@ public class BackupService {
 
     private final BackupGithubService backupGithubService;
 
-    private final Map<String,PathMatcher> mapGlob=new HashMap<>();
+    private final Map<String, PathMatcher> mapGlob = new HashMap<>();
 
     private final RunService runService;
 
@@ -62,16 +62,18 @@ public class BackupService {
                          DataService dataService) {
         this.jBackupProperties = jBackupProperties;
         this.backupGithubService = backupGithubService;
-        this.runService=Objects.requireNonNull(runService,"runService is null");
+        this.runService = Objects.requireNonNull(runService, "runService is null");
         this.dataService = Objects.requireNonNull(dataService);
     }
 
     public void backup() {
+        Duration dureeTotale = null, dureeBackup = null, dureeBackupGit = null;
+        Instant debutTotal = Instant.now();
         try {
             LOGGER.info("backup ...");
             dataService.load();
             if (jBackupProperties.getDir() != null && !jBackupProperties.getDir().isEmpty()) {
-
+                Instant debutBackup = Instant.now();
                 try (ShadowCopy shadowCopyUtils = new ShadowCopy(runService, counter)) {
                     for (var entry : jBackupProperties.getDir().entrySet()) {
                         var save = entry.getValue();
@@ -79,7 +81,7 @@ public class BackupService {
                             LOGGER.info("backup {} disabled", entry.getKey());
                         } else {
                             Instant debut = Instant.now();
-                            String filename0=null;
+                            String filename0 = null;
                             LOGGER.info("backup {} ...", entry.getKey());
                             LOGGER.info("backup from {} to {}", save.getPath(), save.getDest());
 //                            for (var path : save.getPath()) {
@@ -109,50 +111,55 @@ public class BackupService {
 //                                        zipOut.close();
 //                                    }
 //                                } else {
-                                    String filename;
-                                    if(filename0==null) {
-                                        String extension = getExtension(jBackupProperties.getGlobal());
-                                        filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + extension);
-                                        filename0=filename;
+                            String filename;
+                            if (filename0 == null) {
+                                String extension = getExtension(jBackupProperties.getGlobal());
+                                filename = PathUtils.getPath(save.getDest(), entry.getKey() + "_" + Instant.now().getEpochSecond() + extension);
+                                filename0 = filename;
+                            } else {
+                                filename = filename0;
+                            }
+                            try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
+                                compress.start();
+
+                                for (var path : save.getPath()) {
+                                    Path p = Path.of(path);
+                                    if (isShadowCopy()) {
+                                        p = shadowCopyUtils.getPath(p.toAbsolutePath());
+                                    }
+
+                                    if (compress instanceof CompressWalk compressWalk) {
+                                        LOGGER.atInfo().log("compress {} ...", p);
+                                        save3(compressWalk, p, p.getFileName().toString(), save);
+                                        LOGGER.atInfo().log("compress {} OK", p);
                                     } else {
-                                        filename=filename0;
+                                        var compressTask = (CompressTask) compress;
+                                        compressTask.task(p);
                                     }
-                                    try (Compress compress = buildCompress(filename, save, jBackupProperties.getGlobal())) {
-                                        compress.start();
-
-                                        for (var path : save.getPath()) {
-                                            Path p = Path.of(path);
-                                            if (isShadowCopy()) {
-                                                p = shadowCopyUtils.getPath(p.toAbsolutePath());
-                                            }
-
-                                            if (compress instanceof CompressWalk compressWalk) {
-                                                LOGGER.atInfo().log("compress {} ...", p);
-                                                save3(compressWalk, p, p.getFileName().toString(), save);
-                                                LOGGER.atInfo().log("compress {} OK", p);
-                                            } else {
-                                                var compressTask = (CompressTask) compress;
-                                                compressTask.task(p);
-                                            }
-                                        }
-                                    }
-                                    terminate(filename);
+                                }
+                            }
+                            terminate(filename);
 //                                }
                             //}
                             LOGGER.info("backup {} ok ({})", entry.getKey(), Duration.between(debut, Instant.now()));
                         }
                     }
                 }
+                dureeBackup = Duration.between(debutBackup, Instant.now());
             }
             if (jBackupProperties.getGithub() != null && StringUtils.isNotBlank(jBackupProperties.getGithub().getUser())
                     && !jBackupProperties.getGithub().isDisabled()) {
+                Instant debut = Instant.now();
                 backupGithubService.backup(jBackupProperties.getGithub());
+                dureeBackupGit = Duration.between(debut, Instant.now());
             }
             dataService.save();
             LOGGER.info("backup OK");
         } catch (Exception e) {
             LOGGER.error("Error", e);
         }
+        dureeTotale = Duration.between(debutTotal, Instant.now());
+        LOGGER.info("duree: total={}, backup={}, git={}", dureeTotale, dureeBackup, dureeBackupGit);
     }
 
     private void terminate(String file) {
@@ -306,10 +313,10 @@ public class BackupService {
             }
         }
         List<Path> liste;
-        try(var stream=Files.list(p.getParent())
+        try (var stream = Files.list(p.getParent())
                 .filter(x -> {
                     var x1 = x.getFileName().toString();
-                    if(x1.endsWith(EXTENSION_CRP)||x1.endsWith(EXTENSION_ZIP)) {
+                    if (x1.endsWith(EXTENSION_CRP) || x1.endsWith(EXTENSION_ZIP)) {
                         return false;
                     }
                     var x2 = FilenameUtils.removeExtension(p.getFileName().toString());
@@ -345,15 +352,19 @@ public class BackupService {
     private Compress buildCompress(String filename, SaveProperties save, GlobalProperties global) {
         Compress compress;
         if (global.getCompress() == null || global.getCompress() == CompressType.ZIP) {
+            LOGGER.atInfo().log("Pas de compression");
             compress = new CompressZip(filename);
         } else if (global.getCompress() == CompressType.ZIP4J) {
+            LOGGER.atInfo().log("Compression zip4j (crypt={})", jBackupProperties.getGlobal().isCrypt());
             compress = new CompressZip4j(filename,
                     jBackupProperties.getGlobal().isCrypt(),
                     jBackupProperties.getGlobal().getPassword());
         } else if (global.getCompress() == CompressType.SEVENZIP) {
+            LOGGER.atInfo().log("Compression 7zip");
             compress = new CompressSevenZip(filename, jBackupProperties.getGlobal(), save);
         } else if (global.getCompress() == CompressType.ZIPAPACHE) {
             Optional<Long> splitSize;
+            LOGGER.atInfo().log("Compression zip apache (split={})", global.getSplitSize());
             if (global.getSplitSize() != null) {
                 splitSize = Optional.of(global.getSplitSize().toBytes());
             } else {
@@ -387,7 +398,7 @@ public class BackupService {
                 }
             });
         } catch (IOException e) {
-            throw new RuntimeException("Error for save for '"+p+"' (dir="+directory+")", e);
+            throw new RuntimeException("Error for save for '" + p + "' (dir=" + directory + ")", e);
         }
     }
 
@@ -531,8 +542,8 @@ public class BackupService {
         return true;
     }
 
-    private PathMatcher getGlob(String glob){
-        if(mapGlob.containsKey(glob)){
+    private PathMatcher getGlob(String glob) {
+        if (mapGlob.containsKey(glob)) {
             return mapGlob.get(glob);
         } else {
             PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);

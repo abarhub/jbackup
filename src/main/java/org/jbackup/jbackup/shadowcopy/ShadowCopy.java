@@ -11,6 +11,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -115,20 +118,29 @@ public class ShadowCopy implements AutoCloseable {
     }
 
     public void close() {
+        for (var entry : map.entrySet()) {
+            deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
+        }
+        if(false) {
+            try {
+                var duration = Duration.of(60, ChronoUnit.SECONDS);
+                LOGGER.atInfo().log("attente ...");
+                Thread.sleep(duration);
+            } catch (InterruptedException e) {
+                LOGGER.atWarn().log("timeout", e);
+            }
+        }
         for (var entry : mapLink.entrySet()) {
             var path = entry.getValue().getParent();
             try {
                 LOGGER.info("Suppression du link {} ...", path);
                 //var deletedIfExists = Files.deleteIfExists(entry.getValue());
 //                Files.delete(path);
-                var deletedIfExists = Files.deleteIfExists(entry.getValue());
+                var deletedIfExists = Files.deleteIfExists(path);
                 LOGGER.info("Suppression du link {} OK (deleted={})", path, deletedIfExists);
             } catch (IOException e) {
                 LOGGER.error("Can't delete link for {}", path, e);
             }
-        }
-        for (var entry : map.entrySet()) {
-            deleteShadowCopy(entry.getKey(), entry.getValue().shadowId());
         }
     }
 
