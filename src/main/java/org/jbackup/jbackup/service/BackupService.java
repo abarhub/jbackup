@@ -31,6 +31,7 @@ import java.nio.file.PathMatcher;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -55,6 +56,8 @@ public class BackupService {
 
     private final FactoryService factoryService;
 
+    private final Instant dateLimite;
+
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService,
                          RunService runService,
@@ -65,6 +68,12 @@ public class BackupService {
         this.runService = Objects.requireNonNull(runService, "runService is null");
         this.dataService = Objects.requireNonNull(dataService);
         this.factoryService = Objects.requireNonNull(factoryService, "factoryService is null");
+        if (jBackupProperties.getGlobal().getDateLimite() != null) {
+            var date = jBackupProperties.getGlobal().getDateLimite();
+            dateLimite = date.toInstant(ZoneOffset.systemDefault().getRules().getOffset(date));
+        } else {
+            dateLimite = null;
+        }
     }
 
     public void backup() {
@@ -175,29 +184,31 @@ public class BackupService {
     private void checkFiles(String file, List<String> listFiles, Path fileHash, SaveProperties save) {
         LOGGER.atInfo().log("Check files ...");
         Map<String, String> hash = new HashMap<>();
-        try {
-            var list = Files.readAllLines(fileHash);
-            if (!CollectionUtils.isEmpty(list)) {
-                int noline = 0;
-                for (var s : list) {
-                    var i = s.indexOf(' ');
-                    if (i < 0) {
-                        throw new JBackupException("has file invalid (i=" + i + ",noline=" + noline + ")");
+        if(fileHash!=null) {
+            try {
+                var list = Files.readAllLines(fileHash);
+                if (!CollectionUtils.isEmpty(list)) {
+                    int noline = 0;
+                    for (var s : list) {
+                        var i = s.indexOf(' ');
+                        if (i < 0) {
+                            throw new JBackupException("has file invalid (i=" + i + ",noline=" + noline + ")");
+                        }
+                        var hashHexa = s.substring(0, i);
+                        var filename = s.substring(i + 1);
+                        hash.put(filename, hashHexa);
+                        noline++;
                     }
-                    var hashHexa = s.substring(0, i);
-                    var filename = s.substring(i + 1);
-                    hash.put(filename, hashHexa);
-                    noline++;
                 }
+            } catch (IOException e) {
+                throw new JBackupException("Error for read hash", e);
             }
-        } catch (IOException e) {
-            throw new JBackupException("Error for read hash", e);
         }
         for (var p : listFiles) {
             if (p.endsWith(EXTENSION_CRP)) {
                 Path fileNotCrypted = Path.of(p.substring(0, p.length() - 4));
-                if(StringUtils.isNotBlank(save.getDestCrypt())){
-                    fileNotCrypted=Path.of(save.getDest()).resolve(fileNotCrypted.getFileName());
+                if (StringUtils.isNotBlank(save.getDestCrypt())) {
+                    fileNotCrypted = Path.of(save.getDest()).resolve(fileNotCrypted.getFileName());
                 }
                 if (Files.notExists(fileNotCrypted)) {
                     throw new JBackupException("File '" + fileNotCrypted + "' not exist");
@@ -206,7 +217,7 @@ public class BackupService {
                     Path fileDecrypted = null;
                     try {
                         fileDecrypted = Files.createTempFile("jbackup", "tmp");
-                        AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
+                        AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword(), jBackupProperties.getGlobal().getCryptageBuffer());
                         crypt.decrypt(p, fileDecrypted.toString());
                         var len = Files.mismatch(fileDecrypted, fileDecrypted);
                         if (len != -1) {
@@ -227,7 +238,8 @@ public class BackupService {
                             }
                         }
 
-                        if (fileNotCrypted.toString().endsWith(".zip")) {
+                        if (!jBackupProperties.getGlobal().isDesactiveVerificationZip()
+                                &&StringUtils.endsWith(fileNotCrypted.toString(),".zip")) {
                             LOGGER.atInfo().log("Check zip file {} ...", fileNotCrypted);
                             checkZip(fileNotCrypted);
                             LOGGER.atInfo().log("Check zip file {} OK", fileNotCrypted);
@@ -243,23 +255,25 @@ public class BackupService {
                 } catch (IOException | GeneralSecurityException e) {
                     throw new JBackupException("Error for decrypt file " + p, e);
                 }
-                var p2 = Path.of(p);
-                var s = p2.getFileName().toString();
-                if (hash.containsKey(s)) {
-                    try {
-                        var hashRef = hash.get(s);
-                        String sha3Hex = new DigestUtils("SHA-256").digestAsHex(p2);
-                        if (Objects.equals(hashRef, sha3Hex)) {
-                            LOGGER.info("hash ok for {}", p);
-                        } else {
-                            LOGGER.atError().log("Invalide hash for {} ('{}'<>'{}') (size={})", p, hashRef, sha3Hex, Files.size(p2));
-                            throw new JBackupException("Invalide hash for " + p + " ( '" + hashRef + "','" + sha3Hex + "'");
+                if(!jBackupProperties.getGlobal().isDesactiveVerificationHash()) {
+                    var p2 = Path.of(p);
+                    var s = p2.getFileName().toString();
+                    if (hash.containsKey(s)) {
+                        try {
+                            var hashRef = hash.get(s);
+                            String sha3Hex = new DigestUtils("SHA-256").digestAsHex(p2);
+                            if (Objects.equals(hashRef, sha3Hex)) {
+                                LOGGER.info("hash ok for {}", p);
+                            } else {
+                                LOGGER.atError().log("Invalide hash for {} ('{}'<>'{}') (size={})", p, hashRef, sha3Hex, Files.size(p2));
+                                throw new JBackupException("Invalide hash for " + p + " ( '" + hashRef + "','" + sha3Hex + "'");
+                            }
+                        } catch (IOException e) {
+                            throw new JBackupException("Error for calculate hash for file " + s);
                         }
-                    } catch (IOException e) {
-                        throw new JBackupException("Error for calculate hash for file " + s);
+                    } else {
+                        throw new JBackupException("Hash not found for file " + s + " in " + fileHash);
                     }
-                } else {
-                    throw new JBackupException("Hash not found for file " + s + " in " + fileHash);
                 }
             } else {
                 LOGGER.atWarn().log("file {} ignored", p);
@@ -284,44 +298,51 @@ public class BackupService {
     }
 
     private Path calculateHash(List<String> listFiles, String file) {
-        var name = FilenameUtils.removeExtension(file);
-        var f = Path.of(name + EXTENSION_SHA_256);
-        List<String> liste = new ArrayList<>();
-        try {
-            DigestUtils digest = new DigestUtils("SHA-256");
-            for (var p : listFiles) {
-                LOGGER.atInfo().log("calculate hash for file {}", p);
-                Path p2 = Path.of(p);
-                String sha3Hex = digest.digestAsHex(p2);
-                var s = sha3Hex + " " + p2.getFileName();
-                LOGGER.info("hash {} for {} ({})", sha3Hex, p2.getFileName(), Files.size(p2));
-                liste.add(s);
+        if(jBackupProperties.getGlobal().isDesactiveHash()){
+            LOGGER.atInfo().log("creation du hash desactive");
+            return null;
+        } else {
+            var name = FilenameUtils.removeExtension(file);
+            var f = Path.of(name + EXTENSION_SHA_256);
+            List<String> liste = new ArrayList<>();
+            try {
+                DigestUtils digest = new DigestUtils("SHA-256");
+                for (var p : listFiles) {
+                    LOGGER.atInfo().log("calculate hash for file {}", p);
+                    Path p2 = Path.of(p);
+                    String sha3Hex = digest.digestAsHex(p2);
+                    var s = sha3Hex + " " + p2.getFileName();
+                    LOGGER.info("hash {} for {} ({})", sha3Hex, p2.getFileName(), Files.size(p2));
+                    liste.add(s);
+                }
+                Files.write(f, liste);
+            } catch (IOException e) {
+                throw new JBackupException("error for calculate hash");
             }
-            Files.write(f, liste);
-        } catch (IOException e) {
-            throw new JBackupException("error for calculate hash");
+            LOGGER.atInfo().log("file {} created", f);
+            return f;
         }
-        LOGGER.atInfo().log("file {} created", f);
-        return f;
     }
 
     private List<String> crypt(String file, SaveProperties save) {
         List<String> listeFiles = new ArrayList<>();
         listeFiles.add(file);
         var p = Path.of(file);
-        if (Files.exists(p)) {
-            try {
-                String fileCrypt;
-                if (StringUtils.isNotBlank(save.getDestCrypt())) {
-                    fileCrypt = save.getDestCrypt() + "/" + p.getFileName() + EXTENSION_CRP;
-                } else {
-                    fileCrypt = p + EXTENSION_CRP;
+        if(!jBackupProperties.getGlobal().isDesactiveCryptage()) {
+            if (Files.exists(p)) {
+                try {
+                    String fileCrypt;
+                    if (StringUtils.isNotBlank(save.getDestCrypt())) {
+                        fileCrypt = save.getDestCrypt() + "/" + p.getFileName() + EXTENSION_CRP;
+                    } else {
+                        fileCrypt = p + EXTENSION_CRP;
+                    }
+                    listeFiles.add(fileCrypt);
+                    AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
+                    crypt.encrypt(2, p.toString(), fileCrypt);
+                } catch (IOException | GeneralSecurityException e) {
+                    throw new JBackupException("Error for crypt", e);
                 }
-                listeFiles.add(fileCrypt);
-                AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
-                crypt.encrypt(2, p.toString(), fileCrypt);
-            } catch (IOException | GeneralSecurityException e) {
-                throw new JBackupException("Error for crypt", e);
             }
         }
         List<Path> liste;
@@ -341,15 +362,18 @@ public class BackupService {
         for (var p3 : liste) {
             try {
                 listeFiles.add(p3.toString());
-                String fileCrypt;
-                if (StringUtils.isNotBlank(save.getDestCrypt())) {
-                    fileCrypt = save.getDestCrypt() + "/" + p3.getFileName() + EXTENSION_CRP;
-                } else {
-                    fileCrypt = p3 + EXTENSION_CRP;
+                if(!jBackupProperties.getGlobal().isDesactiveCryptage()) {
+                    String fileCrypt;
+                    if (StringUtils.isNotBlank(save.getDestCrypt())) {
+                        fileCrypt = save.getDestCrypt() + "/" + p3.getFileName() + EXTENSION_CRP;
+                    } else {
+                        fileCrypt = p3 + EXTENSION_CRP;
+                    }
+                    listeFiles.add(fileCrypt);
+                    AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword(),
+                            jBackupProperties.getGlobal().getCryptageBuffer());
+                    crypt.encrypt(2, p3.toString(), fileCrypt);
                 }
-                listeFiles.add(fileCrypt);
-                AESCrypt crypt = new AESCrypt(false, jBackupProperties.getGlobal().getPassword());
-                crypt.encrypt(2, p3.toString(), fileCrypt);
             } catch (IOException | GeneralSecurityException e) {
                 throw new JBackupException("Error for crypt", e);
             }
@@ -387,7 +411,7 @@ public class BackupService {
             } else {
                 splitSize = Optional.empty();
             }
-            compress = new CompressZipApache(filename, splitSize, runService);
+            compress = new CompressZipApache(filename, splitSize, runService, jBackupProperties.getGlobal().getZipBuffer());
         } else {
             throw new JBackupException("Invalid value for compress: " + global.getCompress());
         }
@@ -408,7 +432,7 @@ public class BackupService {
                         save3(compress, x, dir, save);
                         LOGGER.debug("sort dir {}", x);
                     } else {
-                        if (include(x, save)) {
+                        if (include(x, save) && fichierAPrendre(x)) {
                             LOGGER.debug("save file {}", x);
                             var dir = PathUtils.getPath(directory, x.getFileName().toString());
                             compress.addFile(dir, x);
@@ -422,6 +446,24 @@ public class BackupService {
             throw new RuntimeException("Error for save for '" + p + "' (dir=" + directory + ")", e);
         }
         LOGGER.debug("save3({}) OK", p);
+    }
+
+    private boolean fichierAPrendre(Path x) {
+        if (dateLimite != null) {
+            try {
+                var dateFichier = Files.getLastModifiedTime(x);
+                if (dateFichier.toInstant().compareTo(this.dateLimite) >= 0) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } catch (IOException e) {
+                LOGGER.warn("impossible d'avoir la date du fichier {}", x, e);
+                return true;
+            }
+        } else {
+            return true;
+        }
     }
 
     private boolean isShadowCopy() {

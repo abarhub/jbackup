@@ -76,6 +76,7 @@ public class AESCrypt {
 	private SecretKeySpec aesKey1;
 	private IvParameterSpec ivSpec2;
 	private SecretKeySpec aesKey2;
+	private int bufferSize;
 	
 	
 	/*******************
@@ -245,6 +246,10 @@ public class AESCrypt {
 	 * @throws UnsupportedEncodingException if UTF-16 encoding is not supported.
 	 */
 	public AESCrypt(boolean debug, String password) throws GeneralSecurityException, UnsupportedEncodingException {
+		this(debug,password,0);
+	}
+
+	public AESCrypt(boolean debug, String password, int bufferSize) throws GeneralSecurityException, UnsupportedEncodingException {
 		try {
 			//DEBUG = debug;
 			setPassword(password);
@@ -252,6 +257,7 @@ public class AESCrypt {
 			digest = MessageDigest.getInstance(DIGEST_ALG);
 			cipher = Cipher.getInstance(CRYPT_TRANS);
 			hmac = Mac.getInstance(HMAC_ALG);
+			this.bufferSize = bufferSize;
 		} catch (GeneralSecurityException e) {
 			throw new GeneralSecurityException(JCE_EXCEPTION_MESSAGE, e);
 		}
@@ -279,9 +285,17 @@ public class AESCrypt {
 		InputStream in = null;
 		OutputStream out = null;
 		try {
-			in = new BufferedInputStream(new FileInputStream(fromPath));
+			if(bufferSize>0) {
+				in = new BufferedInputStream(new FileInputStream(fromPath),bufferSize);
+			} else {
+				in = new BufferedInputStream(new FileInputStream(fromPath));
+			}
 			debug("Opened for reading: " + fromPath);
-			out = new BufferedOutputStream(new FileOutputStream(toPath));
+			if(bufferSize>0) {
+				out = new BufferedOutputStream(new FileOutputStream(toPath), bufferSize);
+			} else {
+				out = new BufferedOutputStream(new FileOutputStream(toPath));
+			}
 			debug("Opened for writing: " + toPath);
 			
 			encrypt(version, in, out);
@@ -394,9 +408,17 @@ public class AESCrypt {
 		InputStream in = null;
 		OutputStream out = null;
 		try {
-			in = new BufferedInputStream(new FileInputStream(fromPath));
+			if(bufferSize>0) {
+				in = new BufferedInputStream(new FileInputStream(fromPath), bufferSize);
+			} else {
+				in = new BufferedInputStream(new FileInputStream(fromPath));
+			}
 			debug("Opened for reading: " + fromPath);
-			out = new BufferedOutputStream(new FileOutputStream(toPath));
+			if(bufferSize>0) {
+				out = new BufferedOutputStream(new FileOutputStream(toPath), bufferSize);
+			} else {
+				out = new BufferedOutputStream(new FileOutputStream(toPath));
+			}
 			debug("Opened for writing: " + toPath);
 			
 			decrypt(new File(fromPath).length(), in, out);
@@ -449,7 +471,7 @@ public class AESCrypt {
 			
 			text = new byte[3];
 			readBytes(in, text);	// Heading.
-			if (!new String(text, "UTF-8").equals("AES")) {
+			if (!new String(text, StandardCharsets.UTF_8).equals("AES")) {
 				throw new IOException("Invalid file header");
 			}
 			

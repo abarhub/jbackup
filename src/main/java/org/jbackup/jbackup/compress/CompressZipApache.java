@@ -42,10 +42,20 @@ public class CompressZipApache implements CompressWalk {
 
     private final RunService runService;
 
-    public CompressZipApache(String file, Optional<Long> splitSize, RunService runService) {
+    private final int zipBuffer;
+
+    private final byte[] buffer;
+
+    public CompressZipApache(String file, Optional<Long> splitSize, RunService runService, int zipBuffer) {
         this.file = file;
         this.splitSize = splitSize;
         this.runService=Objects.requireNonNull(runService,"runService is null");
+        this.zipBuffer=zipBuffer;
+        if(zipBuffer>0){
+            buffer=new byte[zipBuffer];
+        } else {
+            buffer=null;
+        }
     }
 
     public void init() {
@@ -193,7 +203,11 @@ public class CompressZipApache implements CompressWalk {
             }
 //            try (var input = new FileInputStream(p.toFile())) {
             try (var input = new FileInputStream(f2)) {
-                IOUtils.copy(input, archive);
+                if(zipBuffer>0){
+                    IOUtils.copyLarge(input, archive, buffer);
+                } else {
+                    IOUtils.copy(input, archive);
+                }
             } catch (FileNotFoundException e) {
                 LOGGER.atError().log("Erreur pour lire le fichier {}",f, e);
                 throw e;

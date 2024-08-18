@@ -3,6 +3,8 @@ package org.jbackup.jbackup.properties;
 import org.jbackup.jbackup.config.CompressType;
 import org.springframework.util.unit.DataSize;
 
+import java.time.LocalDateTime;
+
 public class GlobalProperties {
 
     private CompressType compress;
@@ -18,6 +20,23 @@ public class GlobalProperties {
     private String path7zip;
 
     private boolean shadowCopy;
+
+    private LocalDateTime dateLimite;
+
+    private int cryptageBuffer;
+
+    private boolean desactiveCryptage;
+
+    private boolean desactiveHash;
+
+    private boolean desactiveVerificationCryptage;
+
+    private boolean desactiveVerificationZip;
+
+    private boolean desactiveVerificationHash;
+
+    private int zipBuffer;
+
 
     public CompressType getCompress() {
         return compress;
@@ -73,5 +92,69 @@ public class GlobalProperties {
 
     public void setShadowCopy(boolean shadowCopy) {
         this.shadowCopy = shadowCopy;
+    }
+
+    public LocalDateTime getDateLimite() {
+        return dateLimite;
+    }
+
+    public void setDateLimite(LocalDateTime dateLimite) {
+        this.dateLimite = dateLimite;
+    }
+
+    public int getCryptageBuffer() {
+        return cryptageBuffer;
+    }
+
+    public void setCryptageBuffer(int cryptageBuffer) {
+        this.cryptageBuffer = cryptageBuffer;
+    }
+
+    public boolean isDesactiveCryptage() {
+        return desactiveCryptage;
+    }
+
+    public void setDesactiveCryptage(boolean desactiveCryptage) {
+        this.desactiveCryptage = desactiveCryptage;
+    }
+
+    public boolean isDesactiveHash() {
+        return desactiveHash;
+    }
+
+    public void setDesactiveHash(boolean desactiveHash) {
+        this.desactiveHash = desactiveHash;
+    }
+
+    public boolean isDesactiveVerificationCryptage() {
+        return desactiveVerificationCryptage;
+    }
+
+    public void setDesactiveVerificationCryptage(boolean desactiveVerificationCryptage) {
+        this.desactiveVerificationCryptage = desactiveVerificationCryptage;
+    }
+
+    public boolean isDesactiveVerificationZip() {
+        return desactiveVerificationZip;
+    }
+
+    public void setDesactiveVerificationZip(boolean desactiveVerificationZip) {
+        this.desactiveVerificationZip = desactiveVerificationZip;
+    }
+
+    public boolean isDesactiveVerificationHash() {
+        return desactiveVerificationHash;
+    }
+
+    public void setDesactiveVerificationHash(boolean desactiveVerificationHash) {
+        this.desactiveVerificationHash = desactiveVerificationHash;
+    }
+
+    public int getZipBuffer() {
+        return zipBuffer;
+    }
+
+    public void setZipBuffer(int zipBuffer) {
+        this.zipBuffer = zipBuffer;
     }
 }
