@@ -1,5 +1,6 @@
 package org.jbackup.jbackup.utils;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,25 +58,27 @@ class AESCryptTest {
     }
 
     @Test
-    void test2() throws Exception {
+    void testAex2() throws Exception {
 
         final var s = "abc";
 //        final var bufS = s.getBytes(StandardCharsets.UTF_8);
         final var password = "abc123";
 
         String input = "Java & ChaCha20-Poly1305.";
-        var input0="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-        input=input0;
-        var size=10_000_000;
-        var len=input0.length()*size;
-        var input2=new StringBuilder();
-        input2.append(input0);
-        for( int i=0;i<size;i++){
-            input2.append(input0);
-        }
-        input=input2.toString();
+//        var input0="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+//        input=input0;
+//        var size=10_000_000;
+//        var len=input0.length()*size;
+//        var input2=new StringBuilder();
+//        input2.append(input0);
+//        for( int i=0;i<size;i++){
+//            input2.append(input0);
+//        }
+//        input=input2.toString();
+//        final var bufS=input.getBytes(StandardCharsets.UTF_8);
+//        System.out.println("taille="+bufS.length);
+        input=getData();
         final var bufS=input.getBytes(StandardCharsets.UTF_8);
-        System.out.println("taille="+bufS.length);
 
         var debut = Instant.now();
         var in = new ByteArrayInputStream(bufS);
@@ -114,7 +117,7 @@ class AESCryptTest {
 
 
     @Test
-    void test3() throws Exception {
+    void testChacha3() throws Exception {
 
         TestChaCha20Poly1305.main(null);
     }
@@ -182,6 +185,24 @@ class AESCryptTest {
 
     }
 
+    public static String getData(){
+        String input = "Java & ChaCha20-Poly1305.";
+//        var input0="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+//        input=input0;
+        var size=1_000_000_000;
+//        input0= StringUtils.repeat('X',size);
+//        var len=input0.length()*size;
+//        var input2=new StringBuilder();
+//        input2.append(input0);
+//        for( int i=0;i<size;i++){
+//            input2.append(input0);
+//        }
+//        input=input2.toString();
+        input= StringUtils.repeat('X',size);
+        System.out.println("taille="+input.length());
+        return input;
+    }
+
     public static class TestChaCha20Poly1305 {
 
         private static final int NONCE_LEN = 12;                    // 96 bits, 12 bytes
@@ -190,17 +211,18 @@ class AESCryptTest {
         public static void main(String[] args) throws Exception {
 
             String input = "Java & ChaCha20-Poly1305.";
-            var input0="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-            input=input0;
-            var size=10000_000;
-            var len=input0.length()*size;
-            var input2=new StringBuilder();
-            input2.append(input0);
-            for( int i=0;i<size;i++){
-                input2.append(input0);
-            }
-            input=input2.toString();
-            System.out.println("taille="+input.length());
+//            var input0="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+//            input=input0;
+//            var size=10000_000;
+//            var len=input0.length()*size;
+//            var input2=new StringBuilder();
+//            input2.append(input0);
+//            for( int i=0;i<size;i++){
+//                input2.append(input0);
+//            }
+//            input=input2.toString();
+//            System.out.println("taille="+input.length());
+            input=getData();
 
             Instant debut=Instant.now();
             ChaCha20Poly1305 cipher = new ChaCha20Poly1305();
