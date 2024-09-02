@@ -17,6 +17,7 @@ import org.jbackup.jbackup.properties.GlobalProperties;
 import org.jbackup.jbackup.properties.JBackupProperties;
 import org.jbackup.jbackup.shadowcopy.ShadowCopy;
 import org.jbackup.jbackup.utils.AESCrypt;
+import org.jbackup.jbackup.utils.MatchPath;
 import org.jbackup.jbackup.utils.PathUtils;
 import org.jbackup.jbackup.utils.SevenZipUtils;
 import org.slf4j.Logger;
@@ -57,6 +58,8 @@ public class BackupService {
     private final FactoryService factoryService;
 
     private final Instant dateLimite;
+
+    private MatchPath matchPath;
 
     public BackupService(JBackupProperties jBackupProperties,
                          BackupGithubService backupGithubService,
@@ -142,6 +145,7 @@ public class BackupService {
                                         if (Files.notExists(p)) {
                                             throw new JBackupException("Le répertoire '{}' n'existe pas");
                                         }
+                                        matchPath=new MatchPath(save);
                                         LOGGER.atInfo().log("compress {} ...", p);
                                         save3(compressWalk, p, p.getFileName().toString(), save);
                                         LOGGER.atInfo().log("compress {} OK", p);
@@ -574,6 +578,14 @@ public class BackupService {
     }
 
     private boolean exclude(Path path, SaveProperties saveProperties) {
+        if(false){
+            return exclude0(path, saveProperties);
+        } else {
+            return matchPath.exclude(path);
+        }
+    }
+
+    private boolean exclude0(Path path, SaveProperties saveProperties) {
         if (!CollectionUtils.isEmpty(saveProperties.getExclude())) {
             for (var glob : saveProperties.getExclude()) {
                 try {
