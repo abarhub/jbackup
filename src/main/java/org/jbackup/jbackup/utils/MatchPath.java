@@ -127,10 +127,10 @@ public class MatchPath {
                 if (!tab.isEmpty()) {
                     List<String> liste=tab;
                     if (tab.getFirst().equals("**")) {
-                        liste = liste.subList(1, tab.size() - 1);
+                        liste = liste.subList(1, liste.size() - 1);
                     }
                     if(tab.getLast().equals("**")) {
-                        liste = liste.subList(0, tab.size()-2);
+                        liste = liste.subList(0, liste.size()-2);
                     }
                     if(!liste.isEmpty()){
                         var trouve = false;
