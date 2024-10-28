@@ -539,86 +539,90 @@ public class BackupGithubService {
         var fin = false;
         var no = 0;
         LOGGER.atInfo().log("Enregistrement release ...");
-        do {
-            Map<String, Object> map = new HashMap<>();
-            map.put("per_page", 100);
-            map.put("page", no);
-            LOGGER.atInfo().log("call github release (page: {}) ...", no);
-            var responseEntityMono = githubService.getRelease(github.getUser(), projet.getNom(), map);
-            nbGetRelease++;
-            var responseOpt = responseEntityMono
-                    .onErrorResume(WebClientResponseException.class,
-                            ex -> ex.getStatusCode().value() == 404 ? Mono.empty() : Mono.error(ex))
-                    .doOnError(x -> LOGGER.atError().log("error:  {}", x.getMessage()))
-                    .blockOptional();
-            if (responseOpt.isPresent()) {
-                var response = responseOpt.get();
-                LOGGER.atInfo().log("response:  {}", response.getStatusCode());
-                boolean aucuneDonnees = true;
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    if (response.hasBody()) {
-                        String body = response.getBody();
-                        LOGGER.atDebug().log("response:  {}", body);
+        try {
+            do {
+                Map<String, Object> map = new HashMap<>();
+                map.put("per_page", 100);
+                map.put("page", no);
+                LOGGER.atInfo().log("call github release (page: {}) ...", no);
+                var responseEntityMono = githubService.getRelease(github.getUser(), projet.getNom(), map);
+                nbGetRelease++;
+                var responseOpt = responseEntityMono
+                        .onErrorResume(WebClientResponseException.class,
+                                ex -> ex.getStatusCode().value() == 404 ? Mono.empty() : Mono.error(ex))
+                        .doOnError(x -> LOGGER.atError().log("error:  {}", x.getMessage()))
+                        .blockOptional();
+                if (responseOpt.isPresent()) {
+                    var response = responseOpt.get();
+                    LOGGER.atInfo().log("response:  {}", response.getStatusCode());
+                    boolean aucuneDonnees = true;
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        if (response.hasBody()) {
+                            String body = response.getBody();
+                            LOGGER.atDebug().log("response:  {}", body);
 
-                        var rep = Paths.get(github.getDest(), "release");
-                        try {
-                            var rep3 = rep.resolve(projet.getNom());
-                            var path2 = rep3.resolve("release_meta_" + instant.getEpochSecond() + "_" + no + ".json");
-                            var jsonNode = enregistreJsonSiNonVide(path2, body);
+                            var rep = Paths.get(github.getDest(), "release");
+                            try {
+                                var rep3 = rep.resolve(projet.getNom());
+                                var path2 = rep3.resolve("release_meta_" + instant.getEpochSecond() + "_" + no + ".json");
+                                var jsonNode = enregistreJsonSiNonVide(path2, body);
 
-                            if (jsonNode != null) {
-                                aucuneDonnees = false;
+                                if (jsonNode != null) {
+                                    aucuneDonnees = false;
 
-                                for (int i = 0; i < jsonNode.size(); i++) {
-                                    var node = jsonNode.get(i);
-                                    var tagName = node.get("tag_name").asText();
-                                    if (StringUtils.isNotBlank(tagName)) {
-                                        var path3 = rep3.resolve(tagName);
-                                        if (node.has("assets")) {
-                                            var assets = node.get("assets");
-                                            if (assets != null && assets.isArray() && !assets.isEmpty()) {
-                                                if (Files.notExists(path3)) {
-                                                    Files.createDirectories(path3);
-                                                }
-                                                for (int j = 0; j < assets.size(); j++) {
-                                                    var asset = assets.get(j);
-                                                    var name = asset.get("name").asText();
-                                                    var urlFile = asset.get("browser_download_url").asText();
-                                                    if (StringUtils.isNotBlank(name) && StringUtils.isNotBlank(urlFile)) {
-                                                        var f = path3.resolve(name);
-                                                        if (Files.notExists(f)) {
-                                                            LOGGER.atInfo().log("Enregistre le fichier {} (url: {}) ...", f, urlFile);
-                                                            FileUtils.copyURLToFile(
-                                                                    URI.create(urlFile).toURL(),
-                                                                    f.toFile(),
-                                                                    Math.toIntExact(github.getConnexionTimeout().toMillis()),
-                                                                    Math.toIntExact(github.getReadTimeout().toMillis()));
-                                                            LOGGER.atInfo().log("Enregistre le fichier {} OK", f);
+                                    for (int i = 0; i < jsonNode.size(); i++) {
+                                        var node = jsonNode.get(i);
+                                        var tagName = node.get("tag_name").asText();
+                                        if (StringUtils.isNotBlank(tagName)) {
+                                            var path3 = rep3.resolve(tagName);
+                                            if (node.has("assets")) {
+                                                var assets = node.get("assets");
+                                                if (assets != null && assets.isArray() && !assets.isEmpty()) {
+                                                    if (Files.notExists(path3)) {
+                                                        Files.createDirectories(path3);
+                                                    }
+                                                    for (int j = 0; j < assets.size(); j++) {
+                                                        var asset = assets.get(j);
+                                                        var name = asset.get("name").asText();
+                                                        var urlFile = asset.get("browser_download_url").asText();
+                                                        if (StringUtils.isNotBlank(name) && StringUtils.isNotBlank(urlFile)) {
+                                                            var f = path3.resolve(name);
+                                                            if (Files.notExists(f)) {
+                                                                LOGGER.atInfo().log("Enregistre le fichier {} (url: {}) ...", f, urlFile);
+                                                                FileUtils.copyURLToFile(
+                                                                        URI.create(urlFile).toURL(),
+                                                                        f.toFile(),
+                                                                        Math.toIntExact(github.getConnexionTimeout().toMillis()),
+                                                                        Math.toIntExact(github.getReadTimeout().toMillis()));
+                                                                LOGGER.atInfo().log("Enregistre le fichier {} OK", f);
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
 
+                                        }
                                     }
                                 }
+                            } catch (IOException e) {
+                                throw new JBackupException("Erreur pour enregistre le release", e);
                             }
-                        } catch (IOException e) {
-                            throw new JBackupException("Erreur pour enregistre le release", e);
                         }
-                    }
-                    if (aucuneDonnees) {
+                        if (aucuneDonnees) {
+                            fin = true;
+                        }
+                    } else {
                         fin = true;
                     }
                 } else {
                     fin = true;
                 }
-            } else {
-                fin = true;
-            }
-            no++;
-        } while (!fin);
-        LOGGER.atInfo().log("Enregistrement release ok");
+                no++;
+            } while (!fin);
+            LOGGER.atInfo().log("Enregistrement release ok");
+        } catch (WebClientResponseException e) {
+            LOGGER.atError().log("Erreur pour récupérer la liste des releases (code http:{}) :  {}", e.getStatusCode(), e.getMessage(), e);
+        }
     }
 
     private void enregistreWiki(GithubProperties github, Project projet) {
