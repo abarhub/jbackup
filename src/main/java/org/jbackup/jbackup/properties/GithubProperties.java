@@ -4,6 +4,7 @@ import org.springframework.util.unit.DataSize;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Period;
 import java.util.List;
 
 public class GithubProperties {
@@ -22,6 +23,8 @@ public class GithubProperties {
     private Duration readTimeout;
     private boolean updateReposByDate;
     private Path dataRep;
+    private int nettoyageConcervationMin;
+    private Period nettoyagePeriode;
 
     public String getUser() {
         return user;
@@ -133,5 +136,21 @@ public class GithubProperties {
 
     public void setDataRep(Path dataRep) {
         this.dataRep = dataRep;
+    }
+
+    public int getNettoyageConcervationMin() {
+        return nettoyageConcervationMin;
+    }
+
+    public void setNettoyageConcervationMin(int nettoyageConcervationMin) {
+        this.nettoyageConcervationMin = nettoyageConcervationMin;
+    }
+
+    public Period getNettoyagePeriode() {
+        return nettoyagePeriode;
+    }
+
+    public void setNettoyagePeriode(Period nettoyagePeriode) {
+        this.nettoyagePeriode = nettoyagePeriode;
     }
 }

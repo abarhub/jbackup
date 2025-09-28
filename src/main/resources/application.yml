@@ -47,5 +47,7 @@ jbackup:
     readTimeout: 2m
     updateReposByDate: true
     dataRep: ${jbackup.github.dest}/data/data.json
+    nettoyageConcervationMin: 2
+    nettoyagePeriode: 3M
 
 

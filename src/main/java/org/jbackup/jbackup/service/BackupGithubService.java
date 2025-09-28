@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.common.base.Verify;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.data.GithubData;
@@ -23,17 +24,19 @@ import org.springframework.web.reactive.function.client.support.WebClientAdapter
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import reactor.core.publisher.Mono;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class BackupGithubService {
 
@@ -69,6 +72,7 @@ public class BackupGithubService {
 
         enregistreUser(githubService, github, instant);
         enregistreEtoiles(githubService, github, instant);
+        nettoyageUserEtoiles();
 
         enregistreProjets(github, githubService, instant);
 
@@ -81,6 +85,208 @@ public class BackupGithubService {
                 nbGitRepo, nbGitGist, nbGitWiki, nbGitWikiKO);
 
         LOGGER.atInfo().log("duree du backup: {}", Duration.between(debut, Instant.now()));
+    }
+
+    private void nettoyageUserEtoiles() {
+        if (github.getNettoyagePeriode() == null || github.getNettoyagePeriode().isZero()
+                || github.getNettoyagePeriode().isNegative()) {
+            LOGGER.atInfo().log("Pas de nettoyage des users et des etoiles");
+        } else {
+            try {
+                nettoyage_users();
+
+                nettoyage_star();
+
+            } catch (IOException e) {
+                LOGGER.error("Erreur pour faire le nettoyage", e);
+            }
+        }
+    }
+
+    private void nettoyage_users() throws IOException {
+        LOGGER.atInfo().log("Nettoyage users (nbBackup:{}, periode:{})...",
+                github.getNettoyageConcervationMin(), github.getNettoyagePeriode());
+        var rep = Paths.get(github.getDest(), "github_user");
+
+        final var debut = "github_user_";
+        final var fin = ".json";
+        try (var stream = Files.list(rep)) {
+
+            var listeFichiers = stream
+                    .filter(Files::isRegularFile)
+                    .filter(x -> x.getFileName().toString().startsWith(debut)
+                            && x.getFileName().toString().endsWith(fin))
+                    .toList();
+
+            Map<LocalDate, List<Path>> map = new TreeMap<>();
+            listeFichiers.forEach(path -> {
+                var filename = path.getFileName().toString();
+                var s = StringUtils.substringBetween(filename, debut, fin);
+                if (s != null) {
+                    LocalDate date = null;
+                    try {
+                        long n = Long.parseLong(s);
+                        Instant instant = Instant.ofEpochSecond(n);
+                        date = instant.atZone(ZoneId.systemDefault()).toLocalDate();
+                    } catch (NumberFormatException e) {
+                        LOGGER.atError().log("Erreur pour trouver la date: {}", s, e);
+                    }
+                    if (date != null) {
+                        map.computeIfAbsent(date, k -> new ArrayList<>()).add(path);
+                    }
+                }
+            });
+            suppressionFichierTropAncien(map);
+        }
+        LOGGER.atInfo().log("Nettoyage users OK");
+    }
+
+    private void suppressionFichierTropAncien(Map<LocalDate, List<Path>> map) throws IOException {
+        List<LocalDate> dates = new ArrayList<>(map.keySet());
+        Collections.sort(dates);
+        Collections.reverse(dates);
+        List<Path> fichiersASupprimer = new ArrayList<>();
+        int nb = 0;
+        LocalDate dateMax = LocalDateTime.now().minus(github.getNettoyagePeriode()).toLocalDate();
+        Verify.verify(dateMax.isBefore(LocalDate.now()));
+        for (LocalDate date : dates) {
+            if (date.isBefore(dateMax) && nb >= github.getNettoyageConcervationMin()) {
+                fichiersASupprimer.addAll(map.get(date));
+            }
+            nb++;
+        }
+        LOGGER.atInfo().log("nb fichiers à supprimer : {}", fichiersASupprimer.size());
+        for (int i = 0; i < fichiersASupprimer.size(); i++) {
+            LOGGER.atInfo().log("suppression de : {}", fichiersASupprimer.get(i));
+            Files.deleteIfExists(fichiersASupprimer.get(i));
+        }
+    }
+
+    private void nettoyage_star() throws IOException {
+        LOGGER.atInfo().log("Nettoyage star ...");
+
+        var rep = Paths.get(github.getDest(), "starred");
+        //var path2 = rep.resolve("starred_" + instant.getEpochSecond() + "_" + no + ".json");
+
+        LOGGER.atInfo().log("compression");
+
+        final var debut = "starred_";
+        final var fin = ".json";
+
+        try (var stream = Files.list(rep)) {
+            var listeFichiers = stream
+                    .filter(Files::isRegularFile)
+                    .filter(x -> x.getFileName().toString().startsWith(debut)
+                            && x.getFileName().toString().endsWith(fin))
+                    .toList();
+
+            Map<LocalDate, List<Path>> map = new TreeMap<>();
+
+            listeFichiers.forEach(path -> {
+                var filename = path.getFileName().toString();
+                var s = StringUtils.substringBetween(filename, debut, fin);
+                if (s != null) {
+                    LocalDate date = null;
+                    try {
+                        var s2 = StringUtils.substringBefore(s, "_");
+                        long n = Long.parseLong(s2);
+                        Instant instant = Instant.ofEpochSecond(n);
+                        date = instant.atZone(ZoneId.systemDefault()).toLocalDate();
+                    } catch (NumberFormatException e) {
+                        LOGGER.atError().log("Erreur pour trouver la date: {}", s, e);
+                    }
+                    if (date != null) {
+                        map.computeIfAbsent(date, k -> new ArrayList<>()).add(path);
+                    }
+                }
+            });
+
+            for (var entry : map.entrySet()) {
+
+                LocalDate date = entry.getKey();
+                List<Path> fichiers = entry.getValue();
+                Path p = fichiers.getFirst().getParent();
+                DateTimeFormatter formatter = DateTimeFormatter.BASIC_ISO_DATE;
+                String formattedString = date.format(formatter);
+                Path f = p.resolve(debut + formattedString + ".zip");
+                if (Files.exists(f)) {
+                    int n = 2;
+                    while (Files.exists(f)) {
+                        f = p.resolve(debut + formattedString + "_" + n + ".zip");
+                        n++;
+                    }
+                }
+
+                zipFiles(f, fichiers);
+                for (var fichier : fichiers) {
+                    LOGGER.atInfo().log("suppression de : {}", fichier);
+                    Files.deleteIfExists(fichier);
+                }
+            }
+
+        }
+
+        LOGGER.atInfo().log("nettoyage");
+
+        final var fin2 = ".zip";
+
+        try (var stream = Files.list(rep)) {
+            var listeFichiers = stream
+                    .filter(Files::isRegularFile)
+                    .filter(x -> x.getFileName().toString().startsWith(debut)
+                            && x.getFileName().toString().endsWith(fin2))
+                    .toList();
+
+            Map<LocalDate, List<Path>> map = new TreeMap<>();
+
+            listeFichiers.forEach(path -> {
+                var filename = path.getFileName().toString();
+                var s = StringUtils.substringBetween(filename, debut, fin2);
+                if (s != null) {
+                    LocalDate date = null;
+                    try {
+                        var s2 = StringUtils.substringBefore(s, "_");
+                        if (s2 != null) {
+                            s = s2;
+                        }
+                        DateTimeFormatter formatter = DateTimeFormatter.BASIC_ISO_DATE;
+                        date = LocalDate.parse(s, formatter);
+                    } catch (NumberFormatException e) {
+                        LOGGER.atError().log("Erreur pour trouver la date: {}", s, e);
+                    }
+                    if (date != null) {
+                        map.computeIfAbsent(date, k -> new ArrayList<>()).add(path);
+                    }
+                }
+            });
+
+            suppressionFichierTropAncien(map);
+        }
+
+        LOGGER.atInfo().log("Nettoyage star OK");
+    }
+
+    private void zipFiles(Path f, List<Path> fichiers) throws IOException {
+        LOGGER.atInfo().log("Zipping files to {} ...", f);
+        try (ZipOutputStream zipOut = new ZipOutputStream(Files.newOutputStream(f))) {
+
+            for (var srcFile : fichiers) {
+                File fileToZip = srcFile.toFile();
+                try (FileInputStream fis = new FileInputStream(fileToZip)) {
+                    ZipEntry zipEntry = new ZipEntry(fileToZip.getName());
+                    zipOut.putNextEntry(zipEntry);
+
+                    byte[] bytes = new byte[1024];
+                    int length;
+                    while ((length = fis.read(bytes)) >= 0) {
+                        zipOut.write(bytes, 0, length);
+                    }
+                }
+            }
+
+            //zipOut.close();
+            //fos.close();
+        }
     }
 
     private GithubService getGithubService(GithubProperties github) {
