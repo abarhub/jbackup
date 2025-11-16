@@ -50,4 +50,23 @@ jbackup:
     nettoyageConcervationMin: 2
     nettoyagePeriode: 3M
 
-
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: jbackuptest
+    enable:
+      http.client.requests: true      # métriques RestClient
+  endpoint:
+    prometheus:
+      access: read_only
+  prometheus:
+    metrics:
+      export:
+        pushgateway:
+          enabled: true
+          address:
+          job: jbackuptest
