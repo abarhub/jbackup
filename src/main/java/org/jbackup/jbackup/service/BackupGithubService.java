@@ -57,15 +57,16 @@ public class BackupGithubService {
     private GithubProperties github;
 
     private final DataService dataService;
+    private final GithubService githubService;
 
-    public BackupGithubService(DataService dataService) {
+    public BackupGithubService(DataService dataService, GithubService githubService) {
         this.dataService = dataService;
+        this.githubService = githubService;
     }
 
     public void backup(GithubProperties github) {
         var debut = Instant.now();
         this.github = github;
-        final var githubService = getGithubService(github);
 
         final Instant instant = Instant.now();
         LOGGER.atInfo().log("date: {} ({}s)", instant, instant.getEpochSecond());
@@ -287,28 +288,6 @@ public class BackupGithubService {
             //zipOut.close();
             //fos.close();
         }
-    }
-
-    private GithubService getGithubService(GithubProperties github) {
-        final int size = Math.toIntExact(github.getMaxMemory().toBytes());
-        final ExchangeStrategies strategies = ExchangeStrategies.builder()
-                .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(size))
-                .build();
-        var exchanged = WebClient.builder()
-                .baseUrl(github.getGithubUrl())
-                .exchangeStrategies(strategies);
-        if (StringUtils.isNotBlank(github.getToken())) {
-            LOGGER.atInfo().log("api github with token");
-            exchanged = exchanged.defaultHeader("Authorization", "Bearer " + github.getToken());
-        }
-        if (StringUtils.isNotBlank(github.getApiVersion())) {
-            LOGGER.atInfo().log("api github version: {}", github.getApiVersion());
-            exchanged = exchanged.defaultHeader("X-GitHub-Api-Version", github.getApiVersion());
-        }
-        WebClient client = exchanged.build();
-        HttpServiceProxyFactory factory = HttpServiceProxyFactory.builderFor(WebClientAdapter.create(client)).build();
-
-        return factory.createClient(GithubService.class);
     }
 
     private void enregistreProjets(GithubProperties github, GithubService githubService, Instant instant) {
