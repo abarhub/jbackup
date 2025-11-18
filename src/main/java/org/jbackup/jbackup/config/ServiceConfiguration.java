@@ -1,5 +1,6 @@
 package org.jbackup.jbackup.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.commons.lang3.StringUtils;
 import org.jbackup.jbackup.properties.GithubProperties;
 import org.jbackup.jbackup.properties.JBackupProperties;
@@ -19,8 +20,10 @@ public class ServiceConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServiceConfiguration.class);
 
     @Bean
-    public BackupGithubService backupGithubService(DataService dataService, GithubService getGithubService) {
-        return new BackupGithubService(dataService, getGithubService);
+    public BackupGithubService backupGithubService(DataService dataService,
+                                                   GithubService getGithubService,
+                                                   ObservationRegistry observationRegistry) {
+        return new BackupGithubService(dataService, getGithubService, observationRegistry);
     }
 
     @Bean
@@ -49,7 +52,7 @@ public class ServiceConfiguration {
 
     @Bean
     public GithubService getGithubService(JBackupProperties jBackupProperties, WebClient.Builder webClientBuilder) {
-        GithubProperties github=jBackupProperties.getGithub();
+        GithubProperties github = jBackupProperties.getGithub();
         final int size = Math.toIntExact(github.getMaxMemory().toBytes());
         final ExchangeStrategies strategies = ExchangeStrategies.builder()
                 .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(size))
