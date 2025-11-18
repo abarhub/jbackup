@@ -1,5 +1,8 @@
 package org.jbackup.jbackup.utils;
 
+import com.google.common.base.Joiner;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.jbackup.jbackup.shadowcopy.StreamGobbler;
 import org.slf4j.Logger;
@@ -18,12 +21,16 @@ public class RunProgram {
 
     private ExecutorService executorService;
 
-    public RunProgram() {
+    private final ObservationRegistry observationRegistry;
+
+    public RunProgram(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
         init();
     }
 
-    public RunProgram(ExecutorService executorService) {
+    public RunProgram(ExecutorService executorService, ObservationRegistry observationRegistry) {
         this.executorService = executorService;
+        this.observationRegistry = observationRegistry;
     }
 
     public void init() {
@@ -40,7 +47,7 @@ public class RunProgram {
         ProcessBuilder builder = new ProcessBuilder();
         List<String> liste = new ArrayList<>();
         List<String> listeShow = new ArrayList<>();
-        int pos=0;
+        int pos = 0;
         for (String s : commandes) {
             var s2 = s;
             if (s.contains(" ")) {
@@ -59,7 +66,7 @@ public class RunProgram {
         executorService.submit(streamGobbler);
         StreamGobbler streamGobblerErrur =
                 new StreamGobbler(process.getErrorStream(), (x) -> {
-                    if(stderrVersStdout){
+                    if (stderrVersStdout) {
                         LOGGER.info("stderr: {}", x);
                     } else {
                         LOGGER.error("stderr: {}", x);
@@ -72,14 +79,28 @@ public class RunProgram {
         return res;
     }
 
-    public int runCommand( boolean stderrVersStdout,List<String> commandes, List<String> commandesShow) throws InterruptedException, IOException {
+    public int runCommand(boolean stderrVersStdout, List<String> commandes, List<String> commandesShow) throws InterruptedException, IOException {
         Consumer<String> consumer = (x) -> {
             LOGGER.info("stdout: {}", x);
         };
-        return runCommand(consumer,stderrVersStdout,commandes, commandesShow);
+        return runCommand(consumer, stderrVersStdout, commandes, commandesShow);
+    }
+
+    public int runCommandObs(boolean stderrVersStdout, List<String> commandes, List<String> commandesShow) throws Exception {
+        Integer res;
+        res = Observation.createNotStarted("run", this.observationRegistry)
+                .lowCardinalityKeyValue("action", "run")
+                .highCardinalityKeyValue("command", Joiner.on(",").join(commandesShow))
+                .observeChecked(() -> {
+                    Consumer<String> consumer = (x) -> {
+                        LOGGER.info("stdout: {}", x);
+                    };
+                    return runCommand(consumer, stderrVersStdout, commandes, commandesShow);
+                });
+        return res != null ? res : 0;
     }
 
     public int runCommand(List<String> commandes) throws InterruptedException, IOException {
-        return runCommand(false,commandes, commandes);
+        return runCommand(false, commandes, commandes);
     }
 }
