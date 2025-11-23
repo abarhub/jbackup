@@ -1,11 +1,6 @@
 package org.jbackup.jbackup.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.google.common.base.Joiner;
+
 import com.google.common.base.Verify;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
@@ -20,12 +15,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
-import org.springframework.web.reactive.function.client.ExchangeStrategies;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import org.springframework.web.reactive.function.client.support.WebClientAdapter;
-import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.node.ArrayNode;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -45,7 +41,10 @@ public class BackupGithubService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BackupGithubService.class);
 
-    private static final ObjectMapper MAPPER_WRITER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper MAPPER_WRITER = new ObjectMapper()
+            .rebuild()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     private int nbGetRepos;
     private int nbGetUser;
@@ -75,25 +74,25 @@ public class BackupGithubService {
 
         Observation.createNotStarted("backup", this.observationRegistry)
                 .lowCardinalityKeyValue("action", "backup")
-                .highCardinalityKeyValue("demarrage", ""+Instant.now().toEpochMilli())
+                .highCardinalityKeyValue("demarrage", "" + Instant.now().toEpochMilli())
                 .observe(() -> {
-                            final Instant instant = Instant.now();
-                            LOGGER.atInfo().log("date: {} ({}s)", instant, instant.getEpochSecond());
+                    final Instant instant = Instant.now();
+                    LOGGER.atInfo().log("date: {} ({}s)", instant, instant.getEpochSecond());
 
-                            enregistreUser(githubService, github, instant);
-                            enregistreEtoiles(githubService, github, instant);
-                            nettoyageUserEtoiles();
+                    enregistreUser(githubService, github, instant);
+                    enregistreEtoiles(githubService, github, instant);
+                    nettoyageUserEtoiles();
 
-                            enregistreProjets(github, githubService, instant);
+                    enregistreProjets(github, githubService, instant);
 
-                            enregistreGist(githubService, github, instant);
+                    enregistreGist(githubService, github, instant);
 
-                            LOGGER.atInfo().log("nb appels: {} (user:{}, repos:{}, started:{}, " +
-                                            "gist: {}, release: {}, git repos: {}, git gist: {}, git wiki: {}, git wiki ok: {})",
-                                    nbGetUser + nbGetRepos + nbGetStarred + nbGetGist + nbGetRelease,
-                                    nbGetUser, nbGetRepos, nbGetStarred, nbGetGist, nbGetRelease,
-                                    nbGitRepo, nbGitGist, nbGitWiki, nbGitWikiKO);
-                        });
+                    LOGGER.atInfo().log("nb appels: {} (user:{}, repos:{}, started:{}, " +
+                                    "gist: {}, release: {}, git repos: {}, git gist: {}, git wiki: {}, git wiki ok: {})",
+                            nbGetUser + nbGetRepos + nbGetStarred + nbGetGist + nbGetRelease,
+                            nbGetUser, nbGetRepos, nbGetStarred, nbGetGist, nbGetRelease,
+                            nbGitRepo, nbGitGist, nbGitWiki, nbGitWikiKO);
+                });
 
         LOGGER.atInfo().log("duree du backup: {}", Duration.between(debut, Instant.now()));
     }
@@ -587,7 +586,6 @@ public class BackupGithubService {
                     JsonNode root = null;
                     LOGGER.atInfo().log("Enregistrement des étoiles ...");
                     ObjectMapper mapper = new ObjectMapper();
-                    mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
                     do {
                         Map<String, Object> map = new HashMap<>();
                         map.put("per_page", 100);
@@ -624,7 +622,7 @@ public class BackupGithubService {
                                                 }
                                             }
 
-                                        } catch (JsonProcessingException e) {
+                                        } catch (JacksonException e) {
                                             LOGGER.atError().log("Erreur pour ce body: {}", body);
                                             throw new JBackupException("Erreur pour parser le flux", e);
                                         }
