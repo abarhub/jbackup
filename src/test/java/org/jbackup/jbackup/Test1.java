@@ -3,6 +3,7 @@ package org.jbackup.jbackup;
 
 import org.jbackup.jbackup.properties.PocketProperties;
 import org.jbackup.jbackup.service.PocketService;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +12,7 @@ public class Test1 {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PocketService.class);
 
+    @Disabled("pocket ne fonctionne plus")
     @Test
     void test1() {
         try {
